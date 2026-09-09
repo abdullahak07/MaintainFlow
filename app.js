@@ -1,1 +1,113 @@
-const $=id=>document.getElementById(id);const STORAGE_KEY='maintainflow-simple-v1';const samples={leak:{sender:'sarah.lee@example.com',subject:'Water leaking under kitchen sink',message:"Hi, I'm Sarah at 18 Lakeview Rd, Como. There is water leaking heavily under the kitchen sink and the cupboard is getting wet. It started this morning. Can someone please organise a plumber?"},power:{sender:'daniel.wong@example.com',subject:'Power keeps tripping in apartment',message:'Hi, Daniel here from Unit 7, 42 Oxford St, Leederville. The power keeps tripping whenever we use the kitchen outlets. There are no sparks or smoke, but we have lost power to half the apartment.'},lock:{sender:'aisha.khan@example.com',subject:'Front door lock is broken',message:"Hello, I'm Aisha at 9 Park Lane, Victoria Park. The front door lock has broken and the door will not lock properly. We can still close it but the property is not secure."},gas:{sender:'michael.chen@example.com',subject:'Strong gas smell near stove',message:'Hi, Michael at 31 River View, East Perth. There is a strong smell of gas near the stove and it has become worse in the last 20 minutes. We have turned the stove off and opened the windows.'}};const seededQueue=[{id:'MF-1042',title:'Water leaking under kitchen sink',property:'18 Lakeview Rd, Como',category:'Plumbing',priority:'High',status:'Awaiting review'},{id:'MF-1041',title:'Front door lock is broken',property:'9 Park Lane, Victoria Park',category:'Security',priority:'High',status:'Approved'},{id:'MF-1040',title:'Bedroom air conditioner not cooling',property:'14/88 Hay St, Subiaco',category:'HVAC',priority:'Medium',status:'Awaiting review'}];let currentRequest=null;function loadQueue(){try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY));return Array.isArray(saved)?saved:seededQueue}catch{return seededQueue}}function saveQueue(queue){localStorage.setItem(STORAGE_KEY,JSON.stringify(queue.slice(0,6)))}function escapeHtml(value=''){return String(value).replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]))}function classify(text){const t=text.toLowerCase();if(/gas smell|smell of gas|gas leak|carbon monoxide/.test(t))return['Gas / safety','Emergency'];if(/spark|sparking|smoke|burning smell|exposed wire/.test(t)&&!/no spark|no sparking|no smoke/.test(t))return['Electrical','Emergency'];if(/lock|door.*secure|not secure|break.?in|broken door/.test(t))return['Security','High'];if(/leak|water|tap|sink|toilet|pipe|plumb/.test(t))return['Plumbing',/flood|burst|heavily|ceiling|cannot stop/.test(t)?'High':'Medium'];if(/power|electric|outlet|socket|tripping|circuit|light/.test(t))return['Electrical',/lost power|no power|half the apartment/.test(t)?'High':'Medium'];if(/air.?con|air conditioning|heater|heating|cooling|hvac/.test(t))return['HVAC','Medium'];if(/oven|stove|dishwasher|washing machine|dryer|fridge|appliance/.test(t))return['Appliance','Medium'];if(/roof|ceiling|wall|crack|structural/.test(t))return['Structural','Medium'];return['General','Low']}function extractAddress(text){const unit=text.match(/(?:unit|apt|apartment)\s*([\w-]+)[,\s]+(\d+\s+[A-Za-z][A-Za-z\s]+(?:St|Street|Rd|Road|Ave|Avenue|Lane|Ln|Dr|Drive|Way|Cres|Crescent|Tce|Terrace))[,\s]+([A-Za-z][A-Za-z\s]+)/i);if(unit)return`Unit ${unit[1]}, ${unit[2].trim()}, ${unit[3].trim()}`;const slashUnit=text.match(/(\d+\/\d+\s+[A-Za-z][A-Za-z\s]+(?:St|Street|Rd|Road|Ave|Avenue|Lane|Ln|Dr|Drive|Way|Cres|Crescent|Tce|Terrace))[,\s]+([A-Za-z][A-Za-z\s]+)/i);if(slashUnit)return`${slashUnit[1].trim()}, ${slashUnit[2].trim()}`;const plain=text.match(/(\d+\s+[A-Za-z][A-Za-z\s]+(?:St|Street|Rd|Road|Ave|Avenue|Lane|Ln|Dr|Drive|Way|Cres|Crescent|Tce|Terrace))[,\s]+([A-Za-z][A-Za-z\s]+)/i);return plain?`${plain[1].trim()}, ${plain[2].trim()}`:'Address needs confirmation'}function extractName(text,email){const patterns=[/(?:i['’]?m|i am)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/,/(?:hi,?\s+)([A-Z][a-z]+)\s+(?:here|from)/,/(?:hello,?\s+i['’]?m\s+)([A-Z][a-z]+)/i];for(const p of patterns){const m=text.match(p);if(m)return m[1]}if(email.includes('@')){const local=email.split('@')[0].replace(/[._-]+/g,' ');return local.split(' ').map(w=>w?w[0].toUpperCase()+w.slice(1):'').join(' ')}return'Tenant'}function summarise(subject,message){const clean=message.replace(/\s+/g,' ').trim();const firstTwo=clean.split(/(?<=[.!?])\s+/).slice(0,2).join(' ');return firstTwo.length>190?firstTwo.slice(0,187)+'…':firstTwo||subject}function draftReply(name,property,category,priority){const first=name.split(' ')[0]||'there';const urgencySentence=priority==='Emergency'?'We have marked this as an emergency for immediate review.':priority==='High'?'We have marked this as high priority for prompt review.':'We have logged the request for review.';return`Hi ${first},\n\nThanks for letting us know about the ${category.toLowerCase()} issue at ${property}. ${urgencySentence}\n\nA property manager will review the request and confirm the next step.\n\nRegards,\nProperty Management Team`}function analyse(){const sender=$('sender').value.trim(),subject=$('subject').value.trim(),message=$('message').value.trim();if(!sender||!subject||!message){showToast('Please add the sender, subject and message.');return}const combined=`${subject} ${message}`,[category,priority]=classify(combined),property=extractAddress(message),tenant=extractName(message,sender),summary=summarise(subject,message),id=`MF-${Math.floor(1100+Math.random()*800)}`;currentRequest={id,title:subject,property,tenant,category,priority,status:'Awaiting review',sender,summary};$('emptyResult').classList.add('hidden');$('resultContent').classList.remove('hidden');$('resultTitle').textContent=subject;$('propertyValue').textContent=property;$('tenantValue').textContent=tenant;$('categoryValue').textContent=category;$('priorityValue').textContent=priority;$('summaryValue').textContent=summary;$('replyValue').value=draftReply(tenant,property,category,priority);setStatus('Awaiting review');$('reviewActions').classList.remove('hidden');$('approvalNote').classList.add('hidden');document.querySelector('.result-card').scrollIntoView({behavior:'smooth',block:'nearest'})}function setStatus(status){const pill=$('statusPill');pill.textContent=status;pill.className='status-pill';if(status==='Approved')pill.classList.add('approved');if(status==='Rejected')pill.classList.add('rejected')}function review(status){if(!currentRequest)return;currentRequest.status=status;setStatus(status);$('reviewActions').classList.add('hidden');const note=$('approvalNote');note.classList.remove('hidden','rejected');if(status==='Approved')note.textContent='Approved. In a real pilot, the acknowledgement would now be queued for delivery.';else{note.textContent='Rejected. Nothing would be sent.';note.classList.add('rejected')}const queue=loadQueue().filter(x=>x.id!==currentRequest.id);queue.unshift({id:currentRequest.id,title:currentRequest.title,property:currentRequest.property,category:currentRequest.category,priority:currentRequest.priority,status});saveQueue(queue);renderQueue();showToast(status==='Approved'?'Request approved.':'Request rejected.')}function renderQueue(){const queue=loadQueue();$('queueList').innerHTML=queue.slice(0,4).map(item=>`<article class="queue-item"><div class="queue-main"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.id)}</span></div><div class="queue-cell"><span>Property</span><strong>${escapeHtml(item.property)}</strong></div><span class="priority ${escapeHtml(item.priority)}">${escapeHtml(item.priority)}</span><span class="queue-status">${escapeHtml(item.status)}</span></article>`).join('')}function loadSample(key){const s=samples[key];if(!s)return;$('sender').value=s.sender;$('subject').value=s.subject;$('message').value=s.message;$('sender').focus()}function clearForm(){$('sender').value='';$('subject').value='';$('message').value='';$('emptyResult').classList.remove('hidden');$('resultContent').classList.add('hidden');currentRequest=null}let toastTimer;function showToast(message){const toast=$('toast');toast.textContent=message;toast.classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.add('hidden'),2600)}$('analyseBtn').addEventListener('click',analyse);$('approveBtn').addEventListener('click',()=>review('Approved'));$('rejectBtn').addEventListener('click',()=>review('Rejected'));$('clearBtn').addEventListener('click',clearForm);document.querySelectorAll('[data-sample]').forEach(btn=>btn.addEventListener('click',()=>loadSample(btn.dataset.sample)));renderQueue();
+const $ = id => document.getElementById(id);
+
+const samples = {
+  leak: `From: sarah.lee@example.com\nSubject: Water leaking under kitchen sink\n\nHi, I'm Sarah at 18 Lakeview Rd, Como. There is water leaking heavily under the kitchen sink and the cupboard is getting wet. It started this morning. Can someone please organise a plumber?`,
+  power: `From: daniel.wong@example.com\nSubject: Power keeps tripping\n\nHi, Daniel here from Unit 7, 42 Oxford St, Leederville. The power keeps tripping whenever we use the kitchen outlets. There are no sparks or smoke, but we have lost power to half the apartment.`,
+  lock: `From: aisha.khan@example.com\nSubject: Front door lock broken\n\nHello, I'm Aisha at 9 Park Lane, Victoria Park. The front door lock has broken and the door will not lock properly. The property is not secure.`,
+  gas: `From: michael.chen@example.com\nSubject: Strong gas smell near stove\n\nHi, Michael at 31 River View, East Perth. There is a strong smell of gas near the stove and it has become worse in the last 20 minutes. We have turned the stove off and opened the windows.`
+};
+
+function parseEmail(raw) {
+  const from = (raw.match(/^From:\s*(.+)$/mi) || [,'tenant@example.com'])[1].trim();
+  const subject = (raw.match(/^Subject:\s*(.+)$/mi) || [,'Maintenance request'])[1].trim();
+  const body = raw.replace(/^From:.*$/mi,'').replace(/^Subject:.*$/mi,'').trim();
+  return { from, subject, body };
+}
+
+function classify(text) {
+  const t = text.toLowerCase();
+  if (/gas smell|smell of gas|gas leak|carbon monoxide/.test(t)) return ['Gas / safety','Emergency'];
+  if (/spark|sparking|smoke|burning smell|exposed wire/.test(t) && !/no spark|no sparking|no smoke/.test(t)) return ['Electrical','Emergency'];
+  if (/lock|not secure|door.*secure|break.?in/.test(t)) return ['Security','High'];
+  if (/leak|water|tap|sink|toilet|pipe|plumb/.test(t)) return ['Plumbing',/flood|burst|heavily|ceiling|cannot stop/.test(t) ? 'High' : 'Medium'];
+  if (/power|electric|outlet|socket|tripping|circuit/.test(t)) return ['Electrical',/lost power|no power|half the apartment/.test(t) ? 'High' : 'Medium'];
+  if (/air.?con|air conditioning|heater|heating|cooling|hvac/.test(t)) return ['HVAC','Medium'];
+  if (/oven|stove|dishwasher|washing machine|dryer|fridge/.test(t)) return ['Appliance','Medium'];
+  return ['General','Low'];
+}
+
+function extractAddress(text) {
+  const unit = text.match(/(?:unit|apt|apartment)\s*([\w-]+)[,\s]+(\d+\s+[A-Za-z][A-Za-z\s]+(?:St|Street|Rd|Road|Ave|Avenue|Lane|Ln|Dr|Drive|Way|Cres|Crescent|Tce|Terrace))[,\s]+([A-Za-z][A-Za-z\s]+)/i);
+  if (unit) return `Unit ${unit[1]}, ${unit[2].trim()}, ${unit[3].trim()}`;
+  const slash = text.match(/(\d+\/\d+\s+[A-Za-z][A-Za-z\s]+(?:St|Street|Rd|Road|Ave|Avenue|Lane|Ln|Dr|Drive|Way|Cres|Crescent|Tce|Terrace))[,\s]+([A-Za-z][A-Za-z\s]+)/i);
+  if (slash) return `${slash[1].trim()}, ${slash[2].trim()}`;
+  const plain = text.match(/(\d+\s+[A-Za-z][A-Za-z\s]+(?:St|Street|Rd|Road|Ave|Avenue|Lane|Ln|Dr|Drive|Way|Cres|Crescent|Tce|Terrace))[,\s]+([A-Za-z][A-Za-z\s]+)/i);
+  return plain ? `${plain[1].trim()}, ${plain[2].trim()}` : 'Needs confirmation';
+}
+
+function extractName(text, email) {
+  const patterns = [/(?:i['’]?m|i am)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/, /(?:hi,?\s+)([A-Z][a-z]+)\s+(?:here|from)/, /(?:hello,?\s+i['’]?m\s+)([A-Z][a-z]+)/i];
+  for (const p of patterns) { const m = text.match(p); if (m) return m[1]; }
+  const local = email.split('@')[0].replace(/[._-]+/g,' ');
+  return local.split(' ').map(w => w ? w[0].toUpperCase()+w.slice(1) : '').join(' ') || 'Tenant';
+}
+
+function issueSummary(subject, body) {
+  const clean = body.replace(/\s+/g,' ').trim();
+  const first = clean.split(/(?<=[.!?])\s+/).slice(0,2).join(' ');
+  return first || subject;
+}
+
+function draftReply(name, property, category, priority) {
+  const first = name.split(' ')[0] || 'there';
+  const line = priority === 'Emergency' ? 'We have marked this for immediate review.' : priority === 'High' ? 'We have marked this as high priority.' : 'We have logged the request for review.';
+  return `Hi ${first},\n\nThanks for letting us know about the ${category.toLowerCase()} issue at ${property}. ${line}\n\nA property manager will review it and confirm the next step.\n\nRegards,\nProperty Management Team`;
+}
+
+function setStatus(text, type='') {
+  const badge = $('statusBadge');
+  badge.textContent = text;
+  badge.className = `status ${type}`.trim();
+}
+
+function analyse() {
+  const raw = $('emailInput').value.trim();
+  if (!raw) return toast('Paste an email first.');
+  const { from, subject, body } = parseEmail(raw);
+  const [category, priority] = classify(`${subject} ${body}`);
+  const property = extractAddress(body);
+  const tenant = extractName(body, from);
+  $('emptyState').classList.add('hidden');
+  $('resultContent').classList.remove('hidden');
+  $('propertyValue').textContent = property;
+  $('tenantValue').textContent = tenant;
+  $('categoryValue').textContent = category;
+  $('priorityValue').textContent = priority;
+  $('issueValue').textContent = issueSummary(subject, body);
+  $('replyValue').value = draftReply(tenant, property, category, priority);
+  $('actions').classList.remove('hidden');
+  $('doneState').className = 'done hidden';
+  setStatus('Awaiting review');
+  if (window.innerWidth < 761) $('resultContent').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function review(type) {
+  const approved = type === 'approved';
+  setStatus(approved ? 'Approved' : 'Rejected', type);
+  $('actions').classList.add('hidden');
+  const done = $('doneState');
+  done.textContent = approved ? 'Approved.' : 'Rejected.';
+  done.className = `done ${type}`;
+}
+
+function reset() {
+  $('emailInput').value = '';
+  $('resultContent').classList.add('hidden');
+  $('emptyState').classList.remove('hidden');
+  $('statusBadge').classList.add('hidden');
+}
+
+let toastTimer;
+function toast(message) {
+  const el = $('toast');
+  el.textContent = message;
+  el.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), 2200);
+}
+
+$('analyseBtn').addEventListener('click', analyse);
+$('approveBtn').addEventListener('click', () => review('approved'));
+$('rejectBtn').addEventListener('click', () => review('rejected'));
+$('clearBtn').addEventListener('click', reset);
+document.querySelectorAll('[data-sample]').forEach(btn => btn.addEventListener('click', () => { $('emailInput').value = samples[btn.dataset.sample]; }));
