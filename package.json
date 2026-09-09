@@ -1,0 +1,9 @@
+{
+  "name": "maintainflow",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Maintenance workflow demo with Vercel serverless backend",
+  "scripts": {
+    "check": "node --check app.js && node --check api/process.js && node --check api/dispatch.js && node --check api/reject.js && node --check api/health.js"
+  }
+}
