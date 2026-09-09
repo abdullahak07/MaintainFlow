@@ -7,14 +7,25 @@ module.exports = async function handler(req, res) {
 
   let database = false;
   let databaseError = null;
+  let databaseErrorCode = null;
+  let databaseHost = null;
 
-  if (config()) {
-    try {
-      await select('properties', 'select=id&limit=1');
-      database = true;
-    } catch (error) {
-      databaseError = error?.details?.message || error?.message || 'Database check failed';
+  try {
+    const cfg = config();
+    databaseHost = cfg?.host || null;
+    if (cfg) {
+      try {
+        await select('properties', 'select=id&limit=1');
+        database = true;
+      } catch (error) {
+        databaseError = error?.details?.message || error?.causeMessage || error?.message || 'Database check failed';
+        databaseErrorCode = error?.code || null;
+        databaseHost = error?.host || databaseHost;
+      }
     }
+  } catch (error) {
+    databaseError = error?.message || 'Database configuration invalid';
+    databaseErrorCode = error?.code || null;
   }
 
   return res.status(200).json({
@@ -22,6 +33,8 @@ module.exports = async function handler(req, res) {
     database,
     email: emailConfigured(),
     safeDemoRecipient: Boolean(process.env.DEMO_RECIPIENT),
+    ...(databaseHost ? { databaseHost } : {}),
+    ...(databaseErrorCode ? { databaseErrorCode } : {}),
     ...(databaseError ? { databaseError } : {})
   });
 };
