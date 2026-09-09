@@ -82,12 +82,6 @@ module.exports = async function handler(req, res) {
       estimatedHigh: route.high
     });
 
-    await insert('events', {
-      work_order_id: created.id,
-      event_type: 'processed',
-      detail: 'Inbound maintenance email processed and work order prepared.'
-    });
-
     const processingMs = Date.now() - startedAt;
     res.setHeader('Server-Timing', `maintainflow;dur=${processingMs}`);
     return res.status(200).json({
