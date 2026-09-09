@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <main class="wrap">
+  <main class="shell">
     <header class="header">
       <strong>MaintainFlow</strong>
       <span>Demo</span>
@@ -25,49 +25,94 @@ Subject: Strong gas smell near stove
 
 Hi, Michael at 31 River View, East Perth. There is a strong smell of gas near the stove and it has become worse in the last 20 minutes. We have turned the stove off and opened the windows.</textarea>
 
-      <div class="samples">
+      <div class="samples" aria-label="Sample maintenance emails">
         <button type="button" data-sample="leak">Leak</button>
         <button type="button" data-sample="power">Power</button>
         <button type="button" data-sample="lock">Lock</button>
         <button type="button" data-sample="gas">Gas</button>
       </div>
 
-      <button id="analyseBtn" class="primary" type="button">Process request</button>
+      <button id="processBtn" class="primary full" type="button">Process request</button>
     </section>
 
-    <section id="resultView" class="card hidden" aria-live="polite">
+    <section id="workOrderView" class="card hidden" aria-live="polite">
       <div class="card-head">
-        <h1>Maintenance job</h1>
+        <div>
+          <h1>Work order ready</h1>
+          <span id="workOrderId" class="subtle">MF-0000</span>
+        </div>
         <button id="backBtn" class="text-btn" type="button">Back</button>
       </div>
 
-      <div class="job-top">
+      <div class="property-row">
         <div>
-          <span class="label">Property</span>
+          <span class="label">Property matched</span>
           <strong id="propertyValue">—</strong>
         </div>
         <span id="priorityPill" class="priority">—</span>
       </div>
 
-      <div class="job-row">
-        <span class="label">Issue</span>
-        <strong id="issueValue">—</strong>
+      <div class="facts">
+        <div><span class="label">Tenant</span><strong id="tenantValue">—</strong></div>
+        <div><span class="label">Issue</span><strong id="issueValue">—</strong></div>
+        <div><span class="label">Trade</span><strong id="tradeValue">—</strong></div>
+        <div><span class="label">Contractor</span><strong id="contractorValue">—</strong></div>
       </div>
 
-      <div class="job-row muted-row">
-        <span class="label">Tenant</span>
-        <span id="tenantValue">—</span>
+      <div class="budget-row">
+        <div><span class="label">Estimated cost</span><strong id="estimateValue">—</strong></div>
+        <div><span class="label">Owner limit</span><strong id="limitValue">—</strong></div>
+        <span id="budgetStatus" class="budget-status">—</span>
       </div>
 
-      <label class="label reply-label" for="replyValue">Reply</label>
-      <textarea id="replyValue" class="reply" rows="4"></textarea>
+      <div class="prepared">
+        <span class="label">Prepared automatically</span>
+        <div class="prepared-list">
+          <span>✓ Work order</span>
+          <span>✓ Tenant message</span>
+          <span>✓ Contractor dispatch</span>
+          <span>✓ Property log</span>
+        </div>
+      </div>
 
-      <div id="actions" class="actions">
+      <label class="label message-label" for="tenantReply">Tenant message</label>
+      <textarea id="tenantReply" class="reply" rows="3"></textarea>
+
+      <div id="reviewActions" class="actions">
         <button id="rejectBtn" class="secondary" type="button">Reject</button>
-        <button id="approveBtn" class="primary small" type="button">Approve</button>
+        <button id="approveBtn" class="primary" type="button">Approve & dispatch</button>
+      </div>
+    </section>
+
+    <section id="completeView" class="card hidden" aria-live="polite">
+      <div class="complete-head">
+        <span class="success-mark">✓</span>
+        <div>
+          <h1>Dispatched</h1>
+          <span id="completeWorkOrderId" class="subtle">MF-0000</span>
+        </div>
       </div>
 
-      <div id="doneState" class="done hidden"></div>
+      <div class="complete-property" id="completeProperty">—</div>
+
+      <div class="completion-list">
+        <div><span>✓</span><strong>Work order logged</strong></div>
+        <div><span>✓</span><strong>Tenant notified</strong></div>
+        <div><span>✓</span><strong id="contractorDone">Contractor notified</strong></div>
+        <div><span>✓</span><strong>Property timeline updated</strong></div>
+        <div><span>✓</span><strong id="timerDone">Response timer started</strong></div>
+      </div>
+
+      <button id="newRequestBtn" class="primary full" type="button">New request</button>
+    </section>
+
+    <section id="rejectedView" class="card hidden" aria-live="polite">
+      <div class="rejected-state">
+        <span>×</span>
+        <h1>Request rejected</h1>
+        <p>No tenant or contractor message was sent.</p>
+        <button id="rejectedBackBtn" class="secondary" type="button">Back</button>
+      </div>
     </section>
   </main>
 
