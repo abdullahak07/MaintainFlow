@@ -1,0 +1,22 @@
+[
+  {
+    "sender_email": "john.smith@example.com",
+    "subject": "Urgent: leaking kitchen tap at 12 Smith Street",
+    "body": "Hi team,\n\nThe kitchen tap at 12 Smith Street is leaking badly and water is starting to pool under the sink. Could someone please take a look soon?\n\nThanks,\nJohn Smith"
+  },
+  {
+    "sender_email": "mia.chen@example.com",
+    "subject": "No power in unit - 88 Ocean Road",
+    "body": "Hello,\n\nWe have no power at 88 Ocean Road. The neighbouring homes still have electricity. There is no smoke or sparking. Please advise.\n\nRegards,\nMia Chen"
+  },
+  {
+    "sender_email": "ali.khan@example.com",
+    "subject": "Air conditioner not cooling at 7 King Avenue",
+    "body": "Hi,\n\nThe air conditioner at 7 King Avenue turns on but is not cooling. It is not urgent, but could it please be checked when available?\n\nCheers,\nAli Khan"
+  },
+  {
+    "sender_email": "sarah.jones@example.com",
+    "subject": "Gas smell at 45 Lake Drive",
+    "body": "There is a strong smell of gas in the kitchen at 45 Lake Drive. We have moved outside and need urgent help.\n\nThanks,\nSarah Jones"
+  }
+]

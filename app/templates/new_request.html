@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}New request · MaintainFlow{% endblock %}
+{% block content %}
+<section class="narrow">
+  <p class="eyebrow">INBOUND EMAIL</p>
+  <h1>Process maintenance request</h1>
+  <p class="muted">Paste an email exactly as a property manager might receive it.</p>
+  <form method="post" class="panel form-stack">
+    <label>Tenant email<input type="email" name="sender_email" value="john.smith@example.com" required></label>
+    <label>Subject<input name="subject" value="Urgent: leaking kitchen tap at 12 Smith Street" required></label>
+    <label>Email body<textarea name="body" rows="10" required>Hi team,
+
+The kitchen tap at 12 Smith Street is leaking badly and water is starting to pool under the sink. Could someone please take a look soon?
+
+Thanks,
+John Smith</textarea></label>
+    <button class="button" type="submit">Extract & triage</button>
+  </form>
+</section>
+{% endblock %}

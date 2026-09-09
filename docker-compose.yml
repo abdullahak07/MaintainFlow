@@ -1,0 +1,13 @@
+services:
+  maintainflow:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - maintainflow_data:/data
+    environment:
+      - DATABASE_URL=sqlite:////data/maintainflow.db
+volumes:
+  maintainflow_data:
