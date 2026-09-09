@@ -15,14 +15,16 @@ const propertyRecords = [
 ];
 
 const routes = {
-  'Gas / safety': { trade: 'Gas fitter', contractor: 'Westside Plumbing & Gas', low: 300, high: 480, timer: '15-min response timer started' },
-  Plumbing: { trade: 'Plumber', contractor: 'RapidFlow Plumbing', low: 240, high: 360, timer: '30-min response timer started' },
-  Electrical: { trade: 'Electrician', contractor: 'Westline Electrical', low: 280, high: 450, timer: '30-min response timer started' },
-  Security: { trade: 'Locksmith', contractor: 'SecureKey Locksmiths', low: 180, high: 320, timer: '30-min response timer started' },
-  General: { trade: 'Maintenance tech', contractor: 'Metro Property Services', low: 160, high: 300, timer: '4-hour response timer started' }
+  'Gas / safety': { trade: 'Gas fitter', contractor: 'Westside Plumbing & Gas', low: 300, high: 480, sla: 15 },
+  Plumbing: { trade: 'Plumber', contractor: 'RapidFlow Plumbing', low: 240, high: 360, sla: 30 },
+  Electrical: { trade: 'Electrician', contractor: 'Westline Electrical', low: 280, high: 450, sla: 30 },
+  Security: { trade: 'Locksmith', contractor: 'SecureKey Locksmiths', low: 180, high: 320, sla: 30 },
+  General: { trade: 'Maintenance tech', contractor: 'Metro Property Services', low: 160, high: 300, sla: 240 }
 };
 
 let current = null;
+let pendingSync = null;
+let syncVersion = 0;
 
 function parseEmail(raw) {
   const from = (raw.match(/^From:\s*(.+)$/mi) || [, 'tenant@example.com'])[1].trim();
@@ -49,21 +51,26 @@ function extractAddress(text) {
 }
 
 function extractName(text, email) {
-  const patterns = [/(?:i['’]?m|i am)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/, /(?:hi,?\s+)([A-Z][a-z]+)\s+(?:here|at|from)/, /(?:hello,?\s+i['’]?m\s+)([A-Z][a-z]+)/i];
-  for (const p of patterns) { const m = text.match(p); if (m) return m[1]; }
+  const patterns = [
+    /(?:i['’]?m|i am)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/,
+    /(?:hi,?\s+)([A-Z][a-z]+)\s+(?:here|at|from)/,
+    /(?:hello,?\s+i['’]?m\s+)([A-Z][a-z]+)/i
+  ];
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m) return m[1];
+  }
   const local = email.split('@')[0].replace(/[._-]+/g, ' ');
   return local.split(' ').map(w => w ? w[0].toUpperCase() + w.slice(1) : '').join(' ') || 'Tenant';
 }
 
 function matchProperty(address) {
-  const normalized = address.toLowerCase().replace(/\s+/g, ' ').trim();
-  return propertyRecords.find(p => normalized.includes(p.match) || p.match.includes(normalized)) || { address, limit: 500 };
-}
-
-function workOrderNumber(raw) {
-  let hash = 0;
-  for (let i = 0; i < raw.length; i++) hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
-  return `MF-${1040 + (Math.abs(hash) % 800)}`;
+  const normalized = address.toLowerCase().replace(/[.,]/g, '').replace(/\s+/g, ' ').trim();
+  const found = propertyRecords.find(p => {
+    const key = p.match.replace(/[.,]/g, '');
+    return normalized.includes(key) || key.includes(normalized);
+  });
+  return found || { address, limit: 500 };
 }
 
 function tenantMessage(name, issue, priority) {
@@ -79,9 +86,11 @@ function show(view) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function renderWorkOrder(data) {
+function paintWorkOrder(data, { preserveReply = false, navigate = false } = {}) {
+  const existingReply = $('tenantReply').value;
   current = data;
-  $('workOrderId').textContent = data.workOrderCode || data.id;
+
+  $('workOrderId').textContent = data.workOrderCode || 'Saving…';
   $('propertyValue').textContent = data.property;
   $('priorityPill').textContent = data.priority;
   $('priorityPill').className = `priority ${data.priority.toLowerCase()}`;
@@ -93,12 +102,21 @@ function renderWorkOrder(data) {
   $('limitValue').textContent = data.ownerLimit == null ? '—' : `$${data.ownerLimit}`;
   $('budgetStatus').textContent = data.withinLimit ? 'Within limit' : 'Approval needed';
   $('budgetStatus').className = `budget-status${data.withinLimit ? '' : ' over'}`;
-  $('tenantReply').value = data.tenantMessage;
+  $('tenantReply').value = preserveReply && existingReply ? existingReply : data.tenantMessage;
 
-  const dispatchable = !data.backend || (!data.requiresAttention && data.withinLimit);
-  $('approveBtn').disabled = !dispatchable;
-  $('approveBtn').textContent = dispatchable ? 'Approve & dispatch' : 'Manual review required';
-  show('workOrderView');
+  if (data.syncing) {
+    $('approveBtn').disabled = true;
+    $('approveBtn').textContent = 'Preparing…';
+  } else if (data.syncError && !data.demoFallback) {
+    $('approveBtn').disabled = true;
+    $('approveBtn').textContent = 'Backend unavailable';
+  } else {
+    const dispatchable = data.demoFallback || (data.backend && !data.requiresAttention && data.withinLimit);
+    $('approveBtn').disabled = !dispatchable;
+    $('approveBtn').textContent = dispatchable ? 'Approve & dispatch' : 'Manual review required';
+  }
+
+  if (navigate) show('workOrderView');
 }
 
 function localProcess(raw) {
@@ -109,10 +127,12 @@ function localProcess(raw) {
   const tenant = extractName(body, from);
   const route = routes[category] || routes.General;
   const withinLimit = route.high <= property.limit;
+
   return {
     backend: false,
-    id: workOrderNumber(raw),
-    workOrderCode: workOrderNumber(raw),
+    syncing: true,
+    demoFallback: false,
+    workOrderCode: 'Saving…',
     issue: subject,
     property: property.address,
     ownerLimit: property.limit,
@@ -126,46 +146,74 @@ function localProcess(raw) {
     withinLimit,
     requiresAttention: false,
     tenantMessage: tenantMessage(tenant, subject, priority),
-    responseSlaMinutes: Number(route.timer.match(/\d+/)?.[0] || 30)
+    responseSlaMinutes: route.sla
   };
 }
 
-async function processRequest() {
+function syncToBackend(raw, draft, version) {
+  return fetch('/api/process', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rawEmail: raw })
+  })
+    .then(async res => ({ res, data: await res.json().catch(() => ({})) }))
+    .then(({ res, data }) => {
+      if (version !== syncVersion) return null;
+
+      if (res.ok) {
+        const merged = { ...draft, ...data, backend: true, syncing: false, demoFallback: false, syncError: false };
+        paintWorkOrder(merged, { preserveReply: true });
+        return merged;
+      }
+
+      if (res.status === 503 && data.code === 'BACKEND_NOT_CONFIGURED') {
+        const fallback = { ...draft, syncing: false, demoFallback: true, syncError: false };
+        paintWorkOrder(fallback, { preserveReply: true });
+        return fallback;
+      }
+
+      throw new Error(data.error || 'Could not save work order');
+    })
+    .catch(error => {
+      if (version !== syncVersion) return null;
+      const failed = { ...draft, syncing: false, syncError: true, demoFallback: false };
+      paintWorkOrder(failed, { preserveReply: true });
+      toast(error.message || 'Backend unavailable');
+      return failed;
+    });
+}
+
+function processRequest() {
   const raw = $('emailInput').value.trim();
   if (!raw) return toast('Paste an email first.');
-  $('processBtn').disabled = true;
-  $('processBtn').textContent = 'Processing…';
-  try {
-    const res = await fetch('/api/process', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rawEmail: raw }) });
-    const data = await res.json().catch(() => ({}));
-    if (res.ok) return renderWorkOrder({ ...data, backend: true });
-    if (res.status === 503 && data.code === 'BACKEND_NOT_CONFIGURED') {
-      toast('Demo mode — backend not configured yet.');
-      return renderWorkOrder(localProcess(raw));
-    }
-    throw new Error(data.error || 'Backend processing failed');
-  } catch (error) {
-    if (error instanceof TypeError) {
-      toast('Demo mode — backend unavailable.');
-      return renderWorkOrder(localProcess(raw));
-    }
-    toast(error.message);
-  } finally {
-    $('processBtn').disabled = false;
-    $('processBtn').textContent = 'Process request';
-  }
+
+  const version = ++syncVersion;
+  const draft = localProcess(raw);
+
+  // The useful result appears immediately. Persistence/matching happens in parallel.
+  paintWorkOrder(draft, { navigate: true });
+  pendingSync = syncToBackend(raw, draft, version);
 }
 
 async function approve() {
   if (!current) return;
+
   $('approveBtn').disabled = true;
   $('approveBtn').textContent = 'Dispatching…';
+
   try {
+    if (current.syncing && pendingSync) await pendingSync;
+    if (!current) throw new Error('Work order unavailable');
+    if (current.syncError && !current.demoFallback) throw new Error('Work order was not saved. Try again.');
+
     if (current.backend) {
       const res = await fetch('/api/dispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workOrderId: current.workOrderId, tenantMessage: $('tenantReply').value.trim() })
+        body: JSON.stringify({
+          workOrderId: current.workOrderId,
+          tenantMessage: $('tenantReply').value.trim()
+        })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Dispatch failed');
@@ -173,7 +221,7 @@ async function approve() {
       current.responseSlaMinutes = data.responseSlaMinutes || current.responseSlaMinutes;
     }
 
-    $('completeWorkOrderId').textContent = current.workOrderCode || current.id;
+    $('completeWorkOrderId').textContent = current.workOrderCode || '—';
     $('completeProperty').textContent = `${current.property} · ${current.priority}`;
     $('contractorDone').textContent = `${current.contractor} notified`;
     $('timerDone').textContent = `${current.responseSlaMinutes || 30}-min response timer started`;
@@ -186,6 +234,8 @@ async function approve() {
 }
 
 async function reject() {
+  if (current?.syncing && pendingSync) await pendingSync;
+
   if (current?.backend) {
     try {
       const res = await fetch('/api/reject', {
@@ -203,9 +253,12 @@ async function reject() {
 }
 
 function reset() {
+  syncVersion += 1;
   current = null;
+  pendingSync = null;
   $('emailInput').value = '';
   $('approveBtn').disabled = false;
+  $('approveBtn').textContent = 'Approve & dispatch';
   show('inputView');
 }
 
@@ -225,4 +278,6 @@ $('backBtn').addEventListener('click', () => show('inputView'));
 $('clearBtn').addEventListener('click', reset);
 $('newRequestBtn').addEventListener('click', reset);
 $('rejectedBackBtn').addEventListener('click', () => show('workOrderView'));
-document.querySelectorAll('[data-sample]').forEach(btn => btn.addEventListener('click', () => { $('emailInput').value = samples[btn.dataset.sample]; }));
+document.querySelectorAll('[data-sample]').forEach(btn => {
+  btn.addEventListener('click', () => { $('emailInput').value = samples[btn.dataset.sample]; });
+});
