@@ -3,87 +3,74 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#f7f8fb" />
-  <meta name="description" content="MaintainFlow turns tenant maintenance emails into structured, ready-to-review jobs." />
-  <title>MaintainFlow — Maintenance intake, simplified</title>
+  <meta name="theme-color" content="#f6f7f9" />
+  <title>MaintainFlow</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header class="site-header">
-    <a class="brand" href="#top" aria-label="MaintainFlow home">
-      <span class="brand-mark">M</span><span class="brand-name">MaintainFlow</span>
-    </a>
-    <div class="header-right"><span class="demo-badge">Live demo</span><a class="small-link" href="#demo">Try it</a></div>
+  <header class="topbar">
+    <div class="brand"><span class="mark">M</span><span>MaintainFlow</span></div>
+    <span class="demo-tag">Demo</span>
   </header>
 
-  <main id="top">
-    <section class="hero">
-      <div class="hero-copy">
-        <p class="eyebrow">For residential property managers</p>
-        <h1>Turn a tenant email into a ready-to-review maintenance job.</h1>
-        <p class="hero-sub">MaintainFlow extracts the property, issue and urgency, then prepares a reply for a property manager to approve.</p>
-        <div class="hero-actions"><a class="button primary" href="#demo">Try the live demo</a><span class="microcopy">No login. No setup. Nothing is sent.</span></div>
-        <div class="trust-row" aria-label="Workflow features"><span>Structured intake</span><span>Urgency triage</span><span>Human approval</span></div>
+  <main class="app">
+    <section class="panel input-panel">
+      <div class="panel-head">
+        <h1>Tenant email</h1>
+        <button id="clearBtn" class="link-btn" type="button">Clear</button>
       </div>
-      <div class="hero-preview" aria-label="Example maintenance request">
-        <div class="mail-topline"><span class="mail-dot"></span><span>New tenant email</span><span class="mail-time">09:42</span></div>
-        <div class="mail-subject">Water leaking under kitchen sink</div>
-        <div class="mail-from">From: sarah.lee@example.com</div>
-        <p class="mail-body">Hi, I’m Sarah at 18 Lakeview Rd, Como. There’s water leaking under the kitchen sink and the cupboard is getting wet.</p>
-        <div class="preview-arrow">↓</div>
-        <div class="structured-card">
-          <div><span>Property</span><strong>18 Lakeview Rd, Como</strong></div>
-          <div><span>Category</span><strong>Plumbing</strong></div>
-          <div><span>Priority</span><strong class="priority-high">High</strong></div>
+
+      <textarea id="emailInput" spellcheck="false" aria-label="Tenant email">From: sarah.lee@example.com
+Subject: Water leaking under kitchen sink
+
+Hi, I'm Sarah at 18 Lakeview Rd, Como. There is water leaking heavily under the kitchen sink and the cupboard is getting wet. It started this morning. Can someone please organise a plumber?</textarea>
+
+      <div class="samples" aria-label="Example emails">
+        <button type="button" data-sample="leak">Leak</button>
+        <button type="button" data-sample="power">Power</button>
+        <button type="button" data-sample="lock">Lock</button>
+        <button type="button" data-sample="gas">Gas</button>
+      </div>
+
+      <button id="analyseBtn" class="primary-btn" type="button">Analyse</button>
+    </section>
+
+    <section class="panel result-panel" aria-live="polite">
+      <div class="panel-head">
+        <h1>Result</h1>
+        <span id="statusBadge" class="status hidden">Awaiting review</span>
+      </div>
+
+      <div id="emptyState" class="empty">Analyse an email to see the maintenance request.</div>
+
+      <div id="resultContent" class="hidden">
+        <dl class="details">
+          <div><dt>Property</dt><dd id="propertyValue">—</dd></div>
+          <div><dt>Tenant</dt><dd id="tenantValue">—</dd></div>
+          <div><dt>Category</dt><dd id="categoryValue">—</dd></div>
+          <div><dt>Priority</dt><dd id="priorityValue">—</dd></div>
+        </dl>
+
+        <div class="issue">
+          <label>Issue</label>
+          <div id="issueValue">—</div>
         </div>
+
+        <label class="reply-label" for="replyValue">Reply</label>
+        <textarea id="replyValue" class="reply" rows="7"></textarea>
+
+        <div id="actions" class="actions">
+          <button id="rejectBtn" class="secondary-btn" type="button">Reject</button>
+          <button id="approveBtn" class="primary-btn compact" type="button">Approve</button>
+        </div>
+
+        <div id="doneState" class="done hidden"></div>
       </div>
     </section>
-
-    <section class="demo-section" id="demo">
-      <div class="section-heading"><p class="eyebrow">Live workflow</p><h2>Paste an email. See the job instantly.</h2><p>Use one of the samples or replace it with your own example.</p></div>
-      <div class="demo-grid">
-        <section class="card compose-card">
-          <div class="card-title-row"><div><p class="step-label">1 · Tenant email</p><h3>Incoming request</h3></div><button class="text-button" id="clearBtn" type="button">Clear</button></div>
-          <label class="field-label" for="sender">From</label><input id="sender" class="input" type="email" value="sarah.lee@example.com" />
-          <label class="field-label" for="subject">Subject</label><input id="subject" class="input" type="text" value="Water leaking under kitchen sink" />
-          <label class="field-label" for="message">Message</label><textarea id="message" class="textarea" rows="9">Hi, I'm Sarah at 18 Lakeview Rd, Como. There is water leaking heavily under the kitchen sink and the cupboard is getting wet. It started this morning. Can someone please organise a plumber?</textarea>
-          <div class="samples"><span>Try:</span><button type="button" data-sample="leak">Water leak</button><button type="button" data-sample="power">Power fault</button><button type="button" data-sample="lock">Broken lock</button><button type="button" data-sample="gas">Gas smell</button></div>
-          <button class="button primary full" id="analyseBtn" type="button">Analyse maintenance request</button>
-        </section>
-
-        <section class="card result-card" id="resultCard">
-          <div id="emptyResult" class="result-empty">
-            <div class="empty-mark">M</div><h3>Ready when you are</h3><p>MaintainFlow will structure the email and prepare it for review.</p>
-            <div class="empty-list"><span>Property & tenant</span><span>Issue category</span><span>Urgency</span><span>Draft acknowledgement</span></div>
-          </div>
-          <div id="resultContent" class="hidden">
-            <div class="card-title-row result-head"><div><p class="step-label">2 · Ready for review</p><h3 id="resultTitle">Maintenance request</h3></div><span class="status-pill" id="statusPill">Awaiting review</span></div>
-            <div class="result-grid">
-              <div class="result-field"><span>Property</span><strong id="propertyValue">—</strong></div>
-              <div class="result-field"><span>Tenant</span><strong id="tenantValue">—</strong></div>
-              <div class="result-field"><span>Category</span><strong id="categoryValue">—</strong></div>
-              <div class="result-field"><span>Priority</span><strong id="priorityValue">—</strong></div>
-            </div>
-            <div class="summary-block"><span>Issue summary</span><p id="summaryValue">—</p></div>
-            <div class="reply-block"><div class="reply-head"><span>Suggested acknowledgement</span><span class="human-note">Human approval required</span></div><textarea id="replyValue" rows="6"></textarea></div>
-            <div class="result-actions" id="reviewActions"><button class="button secondary" id="rejectBtn" type="button">Reject</button><button class="button primary" id="approveBtn" type="button">Approve acknowledgement</button></div>
-            <div class="approval-note hidden" id="approvalNote"></div>
-          </div>
-        </section>
-      </div>
-    </section>
-
-    <section class="queue-section">
-      <div class="section-heading inline-heading"><div><p class="eyebrow">Example queue</p><h2>What the property manager sees next.</h2></div><span class="queue-note">Stored only in this browser</span></div>
-      <div class="queue-list" id="queueList"></div>
-    </section>
-
-    <section class="final-cta"><p class="eyebrow">The point</p><h2>Less copying. Less inbox triage. More time managing properties.</h2><p>MaintainFlow is a demo of one automatable workflow. A real pilot can connect to the agency’s email and property-management systems.</p><a class="button dark" href="#demo">Run the demo again</a></section>
   </main>
 
-  <footer><span>MaintainFlow</span><span>Demo only · Human review before any action</span></footer>
-  <div class="toast hidden" id="toast"></div>
+  <div id="toast" class="toast hidden"></div>
   <script src="/app.js" defer></script>
 </body>
 </html>
