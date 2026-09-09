@@ -1,13 +1,4 @@
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.venv/
-venv/
-.env
-*.db
-*.sqlite*
 .DS_Store
-.idea/
-.vscode/
-coverage.xml
-htmlcov/
+.vercel
+node_modules
+*.log

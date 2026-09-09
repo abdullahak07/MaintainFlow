@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b1220" />
+  <meta name="description" content="MaintainFlow — maintenance request triage and workflow demo for property managers." />
+  <title>MaintainFlow — Property Maintenance Triage</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand-wrap">
+        <div class="brand-mark" aria-hidden="true">M</div>
+        <div>
+          <div class="brand-name">MaintainFlow</div>
+          <div class="brand-subtitle">Property Operations</div>
+        </div>
+      </div>
+
+      <nav class="nav" aria-label="Primary">
+        <button class="nav-item active" data-view="overview">
+          <span class="nav-icon">⌂</span><span>Overview</span>
+        </button>
+        <button class="nav-item" data-view="requests">
+          <span class="nav-icon">▤</span><span>Requests</span>
+          <span class="nav-count" id="navOpenCount">0</span>
+        </button>
+        <button class="nav-item" data-view="new">
+          <span class="nav-icon">＋</span><span>New request</span>
+        </button>
+        <button class="nav-item" data-view="activity">
+          <span class="nav-icon">↻</span><span>Activity</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-card">
+        <div class="sidebar-card-title">Demo workspace</div>
+        <p>Interactive data is stored only in this browser.</p>
+        <button class="text-button" id="resetDemoBtn">Reset demo data</button>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="avatar">AK</div>
+        <div class="user-meta">
+          <strong>Demo Manager</strong>
+          <span>Perth Portfolio</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu" id="mobileMenuBtn" aria-label="Open menu">☰</button>
+          <div>
+            <h1 id="pageTitle">Overview</h1>
+            <p id="pageSubtitle">Maintenance operations at a glance</p>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <div class="live-pill"><span class="live-dot"></span> Demo live</div>
+          <button class="button secondary" id="exportBtn">Export CSV</button>
+          <button class="button primary" data-open-new>＋ New request</button>
+        </div>
+      </header>
+
+      <section class="view active" id="view-overview">
+        <div class="hero-strip">
+          <div>
+            <span class="eyebrow">AUTOMATED INTAKE + HUMAN APPROVAL</span>
+            <h2>Turn messy tenant emails into action-ready maintenance jobs.</h2>
+            <p>MaintainFlow extracts the property, issue, category and urgency, then prepares the request for a property manager to review before anything is sent.</p>
+          </div>
+          <button class="button light" data-open-new>Try a maintenance email</button>
+        </div>
+
+        <div class="metric-grid" id="metricGrid"></div>
+
+        <div class="dashboard-grid">
+          <section class="panel span-2">
+            <div class="panel-header">
+              <div>
+                <h3>Priority queue</h3>
+                <p>Requests needing attention now</p>
+              </div>
+              <button class="text-button" data-view-jump="requests">View all</button>
+            </div>
+            <div id="priorityQueue" class="request-list"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h3>Workload</h3>
+                <p>Open requests by category</p>
+              </div>
+            </div>
+            <div id="categoryBars" class="bar-list"></div>
+          </section>
+
+          <section class="panel span-2">
+            <div class="panel-header">
+              <div>
+                <h3>Recent activity</h3>
+                <p>Latest request events</p>
+              </div>
+              <button class="text-button" data-view-jump="activity">See timeline</button>
+            </div>
+            <div id="recentActivity" class="activity-list compact"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-header">
+              <div>
+                <h3>Automation snapshot</h3>
+                <p>Demo workflow coverage</p>
+              </div>
+            </div>
+            <div class="automation-card">
+              <div class="automation-score"><span id="automationPercent">0</span>%</div>
+              <p>of open requests have already been auto-structured and triaged.</p>
+              <div class="mini-checks">
+                <span>✓ Email extraction</span>
+                <span>✓ Category detection</span>
+                <span>✓ Urgency triage</span>
+                <span>✓ Draft acknowledgement</span>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="view-requests">
+        <section class="panel">
+          <div class="panel-header request-header">
+            <div>
+              <h3>Maintenance requests</h3>
+              <p>Search, filter and review the active portfolio queue</p>
+            </div>
+            <button class="button primary" data-open-new>＋ New request</button>
+          </div>
+
+          <div class="filters">
+            <label class="search-field">
+              <span>⌕</span>
+              <input id="searchInput" type="search" placeholder="Search tenant, property or issue…" />
+            </label>
+            <select id="statusFilter" aria-label="Status filter">
+              <option value="all">All statuses</option>
+              <option value="Awaiting review">Awaiting review</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+              <option value="Resolved">Resolved</option>
+            </select>
+            <select id="urgencyFilter" aria-label="Urgency filter">
+              <option value="all">All priorities</option>
+              <option value="Emergency">Emergency</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+            <select id="categoryFilter" aria-label="Category filter">
+              <option value="all">All categories</option>
+              <option value="Plumbing">Plumbing</option>
+              <option value="Electrical">Electrical</option>
+              <option value="Security">Security</option>
+              <option value="HVAC">HVAC</option>
+              <option value="Appliance">Appliance</option>
+              <option value="Structural">Structural</option>
+              <option value="General">General</option>
+            </select>
+          </div>
+
+          <div class="table-wrap">
+            <table class="request-table">
+              <thead>
+                <tr>
+                  <th>Request</th>
+                  <th>Property</th>
+                  <th>Category</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th>Received</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="requestTableBody"></tbody>
+            </table>
+          </div>
+          <div class="empty-state hidden" id="requestEmptyState">
+            <div class="empty-icon">⌕</div>
+            <h4>No matching requests</h4>
+            <p>Try changing the filters or create a new request.</p>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="view-new">
+        <div class="new-layout">
+          <section class="panel form-panel">
+            <div class="panel-header">
+              <div>
+                <h3>Paste a tenant maintenance email</h3>
+                <p>MaintainFlow will structure and triage it before creating a job.</p>
+              </div>
+            </div>
+            <form id="requestForm">
+              <div class="form-grid two">
+                <label>
+                  Tenant email
+                  <input id="senderEmail" type="email" required placeholder="tenant@example.com" />
+                </label>
+                <label>
+                  Subject
+                  <input id="subject" type="text" required placeholder="Leaking tap at 12 Smith Street" />
+                </label>
+              </div>
+              <label>
+                Email message
+                <textarea id="message" rows="10" required placeholder="Hi, I'm Sarah at 12 Smith Street. The kitchen tap has been leaking heavily since this morning…"></textarea>
+              </label>
+              <div class="sample-row">
+                <span>Try a sample:</span>
+                <button class="chip-button" type="button" data-sample="leak">Water leak</button>
+                <button class="chip-button" type="button" data-sample="power">Power fault</button>
+                <button class="chip-button" type="button" data-sample="lock">Broken lock</button>
+                <button class="chip-button" type="button" data-sample="gas">Gas smell</button>
+              </div>
+              <div class="form-actions">
+                <button class="button secondary" type="button" id="clearFormBtn">Clear</button>
+                <button class="button primary large" type="submit">Analyse & create request →</button>
+              </div>
+            </form>
+          </section>
+
+          <aside class="panel flow-panel">
+            <span class="eyebrow dark">WHAT THE DEMO DOES</span>
+            <h3>From inbox to review queue in seconds.</h3>
+            <div class="flow-steps">
+              <div class="flow-step"><span>1</span><div><strong>Extract</strong><p>Tenant, address and issue details</p></div></div>
+              <div class="flow-line"></div>
+              <div class="flow-step"><span>2</span><div><strong>Triage</strong><p>Category and urgency from the message</p></div></div>
+              <div class="flow-line"></div>
+              <div class="flow-step"><span>3</span><div><strong>Draft</strong><p>Suggested acknowledgement for review</p></div></div>
+              <div class="flow-line"></div>
+              <div class="flow-step"><span>4</span><div><strong>Approve</strong><p>Human confirms before any action</p></div></div>
+            </div>
+            <div class="privacy-note">
+              <strong>Demo-safe by design</strong>
+              <p>No API key, email account or external database is connected. Data remains in this browser.</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="view" id="view-activity">
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <h3>Activity timeline</h3>
+              <p>Audit trail across maintenance requests</p>
+            </div>
+          </div>
+          <div id="fullActivity" class="activity-list"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div class="drawer-backdrop hidden" id="drawerBackdrop"></div>
+  <aside class="drawer" id="requestDrawer" aria-hidden="true">
+    <div class="drawer-head">
+      <div>
+        <span class="eyebrow dark" id="drawerRequestId">REQUEST</span>
+        <h2 id="drawerTitle">Request details</h2>
+      </div>
+      <button class="icon-button" id="closeDrawerBtn" aria-label="Close request details">×</button>
+    </div>
+    <div id="drawerContent" class="drawer-content"></div>
+  </aside>
+
+  <div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

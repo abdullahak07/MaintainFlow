@@ -1,198 +1,100 @@
 # MaintainFlow
 
-**Human-in-the-loop maintenance request automation for residential property managers.**
+**Zero-install maintenance request triage demo for residential property managers.**
 
-MaintainFlow turns an inbound tenant maintenance email into a structured request, classifies the issue and urgency, prepares a tenant acknowledgement, and pauses for property-manager approval before a response is sent.
+MaintainFlow is a browser-based sales/demo application that turns an inbound tenant maintenance email into a structured request, detects the likely maintenance category and priority, prepares a draft acknowledgement, and places the request into a human review queue.
 
-This repository is designed as a commercially credible MVP/demo: it runs without paid services, exposes an API/webhook surface for integrations, records an audit trail, supports optional OpenAI extraction, and can send via SMTP when explicitly enabled.
+This version is intentionally designed for **frictionless Vercel hosting**: no Python runtime, package installation, API key, database or email account is required to demonstrate the workflow.
 
-## Demo workflow
+## What the demo shows
+
+- Professional property-management operations dashboard
+- Seeded realistic maintenance portfolio
+- Paste-email maintenance intake
+- Automatic extraction of tenant, property and issue
+- Rules-based category detection
+- Safety-aware priority triage
+- Human approve / reject / resolve workflow
+- Request-level audit trail
+- Search and filtering
+- CSV export
+- Responsive mobile/desktop UI
+- Browser persistence using `localStorage`
+- Resettable demo workspace
+
+## Architecture
 
 ```text
-Tenant email / webhook
+Tenant maintenance email
         ↓
-Extract tenant + address + issue
+Browser intake form
         ↓
-Classify category + urgency
+Local extraction + triage engine
         ↓
-Create structured maintenance record
+Structured request
         ↓
-Draft acknowledgement
+Human review queue
         ↓
-Property manager reviews
+Approve / reject / resolve
         ↓
-Approve → outbox → dry-run or SMTP
-        ↓
-Auditable status trail
+Browser-local audit trail
 ```
 
-## Features
+The deployed demo is static HTML/CSS/JavaScript. All interactive demo data stays in the visitor's browser.
 
-- FastAPI application with server-rendered responsive dashboard
-- Paste-email demo plus JSON REST API and webhook-friendly endpoint
-- Rule-based extractor that works offline and costs nothing
-- Optional OpenAI Responses API extractor via `LLM_PROVIDER=openai`
-- Categories: plumbing, electrical, appliance, structural, security, HVAC, general
-- Urgency: emergency, high, medium, low
-- Human approval/rejection workflow
-- Safe `MAIL_MODE=console` by default
-- Optional SMTP delivery
-- SQLite persistence
-- Request audit trail and delivery outbox
-- CSV export
-- Sample email data and seed script
-- Docker + Docker Compose
-- Pytest end-to-end tests
-- GitHub Actions CI
+## Deploy to Vercel
 
-## Important product boundary
+1. In Vercel, choose **Add New → Project**.
+2. Import `abdullahak07/MaintainFlow` from GitHub.
+3. Leave **Framework Preset** as `Other` if Vercel does not detect it automatically.
+4. Leave Build Command empty/default.
+5. Leave Output Directory empty/default.
+6. Click **Deploy**.
 
-This MVP **does not automatically dispatch contractors, determine legal obligations, approve expenditure, or make tenancy decisions**. Emergency classification is a triage aid, not a substitute for the property manager's emergency procedures or professional judgement. A human approval step remains before outbound communication.
+There are no environment variables required for this demo.
 
-For a real client deployment, add the client's property-management platform integration, authentication/RBAC, encryption/secret management, retention policy, monitoring, backups, and a reviewed Australian privacy/data-processing configuration.
+## Run locally (optional)
 
-## Quick start
-
-Requires Python 3.11+.
+You do not need to install dependencies. Any static web server works, for example:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate       # Windows: .venv\\Scripts\\activate
-pip install -r requirements.txt
-cp .env.example .env
-python -m scripts.seed
-uvicorn app.main:app --reload
-```
-
-Open `http://127.0.0.1:8000`.
-
-Useful URLs:
-
-- Dashboard: `/`
-- New maintenance email: `/requests/new`
-- API docs: `/docs`
-- Health: `/health`
-- CSV export: `/export.csv`
-
-## Docker
-
-```bash
-cp .env.example .env
-docker compose up --build
+python -m http.server 8000
 ```
 
 Then open `http://localhost:8000`.
 
-## Try the API
+Opening `index.html` directly also works in most browsers, though serving it through HTTP is preferable.
 
-Create a request:
+## Demo walkthrough
 
-```bash
-curl -X POST http://localhost:8000/api/requests \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "sender_email":"john.smith@example.com",
-    "subject":"Urgent: leaking kitchen tap at 12 Smith Street",
-    "body":"The kitchen tap is leaking badly and water is pooling under the sink. Thanks, John Smith"
-  }'
-```
+A useful 60–90 second sales flow is:
 
-Approve it (replace `1` with the request ID):
+1. Open **Overview** and show the priority queue.
+2. Open an emergency/high-priority request to show structured fields and audit history.
+3. Choose **New request**.
+4. Click a sample such as **Water leak** or **Gas smell**.
+5. Click **Analyse & create request**.
+6. Show the detected property, category, urgency and draft acknowledgement.
+7. Click **Approve request**.
+8. Return to the queue to show the updated workflow state.
 
-```bash
-curl -X POST http://localhost:8000/api/requests/1/approve \
-  -H 'Content-Type: application/json' \
-  -d '{"note":"Address and urgency checked"}'
-```
+## Important limitation
 
-In the default console mail mode, the response is printed to the application logs and recorded as sent in the demo outbox. No real tenant is contacted.
+This is a **sales/pilot demo**, not a production tenancy-management system. It deliberately has no authentication, shared database, live email inbox, contractor dispatch, property-management platform integration or real outbound email.
 
-## Webhook integration
+Before processing real tenant data for a client, add at minimum:
 
-`POST /api/webhooks/email` accepts the same JSON shape as `/api/requests`:
+- Authentication and role-based access
+- Server-side shared database
+- Proper secrets management
+- Tenant/privacy data retention policy
+- Backup and recovery
+- Production monitoring and audit controls
+- Approved email and property-management platform integrations
+- Client-reviewed emergency triage and escalation rules
 
-```json
-{
-  "sender_email": "tenant@example.com",
-  "subject": "Broken oven at 10 Example Road",
-  "body": "The oven will not turn on..."
-}
-```
+A natural production path is Vercel + a managed database such as Supabase/Neon/Postgres plus approved email/property-management integrations.
 
-This makes the demo easy to connect to n8n, Make, Zapier, an email parser, or a custom mailbox integration.
+## License
 
-## Optional OpenAI extraction
-
-The default `rules` provider is deterministic and requires no API key. To use the optional OpenAI extractor:
-
-```env
-LLM_PROVIDER=openai
-OPENAI_API_KEY=your_key_here
-OPENAI_MODEL=gpt-5.6-luna
-```
-
-The implementation calls the OpenAI Responses API and validates the returned JSON against a strict Pydantic schema. Do not commit `.env` or API keys.
-
-For client deployments, evaluate model accuracy on the client's real maintenance vocabulary and retain a manual-review path for low-confidence or safety-sensitive requests.
-
-## Optional real email delivery
-
-Default:
-
-```env
-MAIL_MODE=console
-```
-
-To use SMTP:
-
-```env
-MAIL_MODE=smtp
-MAIL_FROM=maintenance@yourdomain.com
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USERNAME=...
-SMTP_PASSWORD=...
-SMTP_USE_TLS=true
-```
-
-Only enable real delivery after testing with non-production addresses.
-
-## Tests
-
-```bash
-pytest
-```
-
-The suite tests extraction, emergency/high/low triage, API request creation, rejection, approval, outbox processing, and the default dry-run send path.
-
-## Suggested 60-second sales demo
-
-1. Open **New request**.
-2. Paste the sample leaking-tap email.
-3. Click **Extract & triage**.
-4. Point out the detected property, tenant, category, urgency and confidence.
-5. Show the generated acknowledgement.
-6. Click **Approve & send**.
-7. Show the `response sent` status and audit trail.
-8. Return to the dashboard and show that the request is now structured and searchable/exportable.
-
-Pitch the outcome, not the AI: **less inbox triage, less copying, faster acknowledgement, and a clear audit trail while the property manager stays in control.**
-
-## Production roadmap
-
-A paid pilot for one agency would typically add only the integrations they use:
-
-- Microsoft 365 / Gmail inbound mailbox
-- PropertyMe, Property Tree, Console Cloud, Re-Leased, MRI, or other PMS integration where APIs permit
-- Contractor/work-order creation after explicit manager approval
-- Organisation authentication and role-based access
-- Property/address matching against the agency rent roll
-- Attachments and photos
-- SLA timers and escalation rules
-- Duplicate-request detection
-- Metrics: time-to-triage, manual touches avoided, approval latency, category volumes
-- Australian privacy/security controls and documented retention/deletion rules
-
-## Licence
-
-MIT. See `LICENSE`.
+MIT — see `LICENSE`.
