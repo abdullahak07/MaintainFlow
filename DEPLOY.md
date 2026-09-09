@@ -1,31 +1,49 @@
 # Deploy MaintainFlow to Vercel
 
-MaintainFlow is now a static web application, so deployment requires no Python environment and no server installation.
+MaintainFlow uses a static browser front end plus Vercel serverless functions under `/api`.
 
-## Fastest route
+## Deploy the UI first
 
-1. Sign in to Vercel.
-2. Click **Add New** → **Project**.
-3. Find and import `abdullahak07/MaintainFlow`.
-4. If asked for a framework, choose **Other**.
-5. Do not add environment variables.
-6. Click **Deploy**.
+1. In Vercel import `abdullahak07/MaintainFlow`.
+2. Use **Other** as the application/framework preset.
+3. Root directory: `./`.
+4. Leave build and output settings at their defaults.
+5. Deploy.
 
-Vercel will serve `index.html` from the repository root.
+Without backend environment variables the public demo still works in safe browser-fallback mode.
 
-## After deployment
+## Enable the real backend
 
-Open the generated `*.vercel.app` URL and verify:
+### 1. Supabase
 
-- Overview dashboard loads.
-- `New request` opens the intake form.
-- A sample email can be loaded and analysed.
-- The new request appears in the queue.
-- Approve / reject changes persist after refresh in that same browser.
-- CSV export downloads correctly.
+Create a Supabase project, open the SQL Editor and run `supabase/schema.sql`.
 
-## Custom domain later
+Add these Vercel environment variables:
 
-When you are ready, attach a branded domain in **Vercel → Project → Settings → Domains**.
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
 
-For client-facing demos, a domain such as `maintainflow.app` or a subdomain of your consulting website looks more credible than a raw Vercel URL.
+### 2. Safe test email via Resend
+
+Add:
+
+- `RESEND_API_KEY`
+- `MAIL_FROM`
+- `DEMO_RECIPIENT` — set this to your own email while testing.
+
+With `DEMO_RECIPIENT` set, tenant and contractor messages are redirected to your inbox. The email subject shows the intended recipient.
+
+Do not set `ALLOW_LIVE_DISPATCH=true` on the public unauthenticated demo.
+
+### 3. Redeploy
+
+After adding environment variables, redeploy the latest `main` deployment from Vercel.
+
+Check:
+
+- `/api/health` returns `database: true` and `email: true`.
+- Processing a sample creates a real row in Supabase `work_orders`.
+- Approve & dispatch sends two safe redirected emails to `DEMO_RECIPIENT`.
+- Supabase `events` records processing, tenant notification, contractor notification and timer start.
+
+See `ENVIRONMENT.md` for all backend variables and safety controls.
