@@ -1,5 +1,5 @@
 const { select, insert, update } = require('../lib/supabase');
-const { sendEmail } = require('../lib/email');
+const { sendBatch } = require('../lib/email');
 const { contractorMessage } = require('../lib/workflow');
 
 module.exports = async function handler(req, res) {
@@ -10,23 +10,32 @@ module.exports = async function handler(req, res) {
   try {
     const workOrderId = Number(req.body?.workOrderId);
     const tenantMessageOverride = String(req.body?.tenantMessage || '').trim();
-    if (!Number.isInteger(workOrderId) || workOrderId <= 0) return res.status(400).json({ error: 'Valid workOrderId is required' });
+    if (!Number.isInteger(workOrderId) || workOrderId <= 0) {
+      return res.status(400).json({ error: 'Valid workOrderId is required' });
+    }
 
     const maxPerHour = Math.max(1, Number(process.env.MAX_DEMO_DISPATCHES_PER_HOUR || 20));
     const since = encodeURIComponent(new Date(Date.now() - 3600000).toISOString());
+    const joinedSelect = encodeURIComponent('*,properties(id,address),tenants(id,name,email),contractors(id,name,email,trade,response_sla_minutes)');
 
     const [recent, rows] = await Promise.all([
       select('events', `select=id&event_type=eq.tenant_notified&created_at=gte.${since}&limit=${maxPerHour}`),
-      select('work_orders', `select=*&id=eq.${workOrderId}&limit=1`)
+      select('work_orders', `select=${joinedSelect}&id=eq.${workOrderId}&limit=1`)
     ]);
 
-    if (recent.length >= maxPerHour) return res.status(429).json({ error: 'Demo dispatch limit reached. Try again later.', code: 'DEMO_RATE_LIMIT' });
+    if (recent.length >= maxPerHour) {
+      return res.status(429).json({ error: 'Demo dispatch limit reached. Try again later.', code: 'DEMO_RATE_LIMIT' });
+    }
 
     const wo = rows[0];
     if (!wo) return res.status(404).json({ error: 'Work order not found' });
 
     if (wo.status === 'dispatched') {
-      return res.status(200).json({ ok: true, alreadyDispatched: true, workOrderCode: `MF-${String(wo.id).padStart(4, '0')}` });
+      return res.status(200).json({
+        ok: true,
+        alreadyDispatched: true,
+        workOrderCode: `MF-${String(wo.id).padStart(4, '0')}`
+      });
     }
 
     if (!wo.property_id || !wo.tenant_id || !wo.contractor_id) {
@@ -36,16 +45,12 @@ module.exports = async function handler(req, res) {
       return res.status(409).json({ error: 'Owner approval is required before dispatch', code: 'OWNER_APPROVAL_REQUIRED' });
     }
 
-    const [properties, tenants, contractors] = await Promise.all([
-      select('properties', `select=id,address&id=eq.${wo.property_id}&limit=1`),
-      select('tenants', `select=id,name,email&id=eq.${wo.tenant_id}&limit=1`),
-      select('contractors', `select=id,name,email,trade,response_sla_minutes&id=eq.${wo.contractor_id}&limit=1`)
-    ]);
-
-    const property = properties[0];
-    const tenant = tenants[0];
-    const contractor = contractors[0];
-    if (!property || !tenant || !contractor) return res.status(409).json({ error: 'Related records are missing' });
+    const property = wo.properties;
+    const tenant = wo.tenants;
+    const contractor = wo.contractors;
+    if (!property || !tenant || !contractor) {
+      return res.status(409).json({ error: 'Related records are missing' });
+    }
 
     const workOrderCode = `MF-${String(wo.id).padStart(4, '0')}`;
     const tenantText = tenantMessageOverride || wo.tenant_message;
@@ -60,20 +65,20 @@ module.exports = async function handler(req, res) {
       estimatedHigh: wo.estimated_high
     });
 
-    const [tenantSend, contractorSend] = await Promise.all([
-      sendEmail({
+    const [tenantSend, contractorSend] = await sendBatch([
+      {
         to: tenant.email,
         intendedTo: tenant.email,
         subject: `${workOrderCode}: Maintenance request received`,
         text: tenantText
-      }),
-      sendEmail({
+      },
+      {
         to: contractor.email,
         intendedTo: contractor.email,
         subject: `${workOrderCode}: ${wo.priority} maintenance — ${property.address}`,
         text: contractorText
-      })
-    ]);
+      }
+    ], { idempotencyKey: `maintainflow-dispatch-${wo.id}` });
 
     const dispatchedAt = new Date().toISOString();
     const events = [
