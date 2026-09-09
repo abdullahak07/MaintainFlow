@@ -3,70 +3,71 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#f6f7f9" />
+  <meta name="theme-color" content="#f5f6f8" />
   <title>MaintainFlow</title>
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand"><span class="mark">M</span><span>MaintainFlow</span></div>
-    <span class="demo-tag">Demo</span>
-  </header>
+  <main class="wrap">
+    <header class="header">
+      <strong>MaintainFlow</strong>
+      <span>Demo</span>
+    </header>
 
-  <main class="app">
-    <section class="panel input-panel">
-      <div class="panel-head">
+    <section id="inputView" class="card">
+      <div class="card-head">
         <h1>Tenant email</h1>
-        <button id="clearBtn" class="link-btn" type="button">Clear</button>
+        <button id="clearBtn" class="text-btn" type="button">Clear</button>
       </div>
 
-      <textarea id="emailInput" spellcheck="false" aria-label="Tenant email">From: sarah.lee@example.com
-Subject: Water leaking under kitchen sink
+      <textarea id="emailInput" spellcheck="false">From: michael.chen@example.com
+Subject: Strong gas smell near stove
 
-Hi, I'm Sarah at 18 Lakeview Rd, Como. There is water leaking heavily under the kitchen sink and the cupboard is getting wet. It started this morning. Can someone please organise a plumber?</textarea>
+Hi, Michael at 31 River View, East Perth. There is a strong smell of gas near the stove and it has become worse in the last 20 minutes. We have turned the stove off and opened the windows.</textarea>
 
-      <div class="samples" aria-label="Example emails">
+      <div class="samples">
         <button type="button" data-sample="leak">Leak</button>
         <button type="button" data-sample="power">Power</button>
         <button type="button" data-sample="lock">Lock</button>
         <button type="button" data-sample="gas">Gas</button>
       </div>
 
-      <button id="analyseBtn" class="primary-btn" type="button">Analyse</button>
+      <button id="analyseBtn" class="primary" type="button">Process request</button>
     </section>
 
-    <section class="panel result-panel" aria-live="polite">
-      <div class="panel-head">
-        <h1>Result</h1>
-        <span id="statusBadge" class="status hidden">Awaiting review</span>
+    <section id="resultView" class="card hidden" aria-live="polite">
+      <div class="card-head">
+        <h1>Maintenance job</h1>
+        <button id="backBtn" class="text-btn" type="button">Back</button>
       </div>
 
-      <div id="emptyState" class="empty">Analyse an email to see the maintenance request.</div>
-
-      <div id="resultContent" class="hidden">
-        <dl class="details">
-          <div><dt>Property</dt><dd id="propertyValue">—</dd></div>
-          <div><dt>Tenant</dt><dd id="tenantValue">—</dd></div>
-          <div><dt>Category</dt><dd id="categoryValue">—</dd></div>
-          <div><dt>Priority</dt><dd id="priorityValue">—</dd></div>
-        </dl>
-
-        <div class="issue">
-          <label>Issue</label>
-          <div id="issueValue">—</div>
+      <div class="job-top">
+        <div>
+          <span class="label">Property</span>
+          <strong id="propertyValue">—</strong>
         </div>
-
-        <label class="reply-label" for="replyValue">Reply</label>
-        <textarea id="replyValue" class="reply" rows="7"></textarea>
-
-        <div id="actions" class="actions">
-          <button id="rejectBtn" class="secondary-btn" type="button">Reject</button>
-          <button id="approveBtn" class="primary-btn compact" type="button">Approve</button>
-        </div>
-
-        <div id="doneState" class="done hidden"></div>
+        <span id="priorityPill" class="priority">—</span>
       </div>
+
+      <div class="job-row">
+        <span class="label">Issue</span>
+        <strong id="issueValue">—</strong>
+      </div>
+
+      <div class="job-row muted-row">
+        <span class="label">Tenant</span>
+        <span id="tenantValue">—</span>
+      </div>
+
+      <label class="label reply-label" for="replyValue">Reply</label>
+      <textarea id="replyValue" class="reply" rows="4"></textarea>
+
+      <div id="actions" class="actions">
+        <button id="rejectBtn" class="secondary" type="button">Reject</button>
+        <button id="approveBtn" class="primary small" type="button">Approve</button>
+      </div>
+
+      <div id="doneState" class="done hidden"></div>
     </section>
   </main>
 
