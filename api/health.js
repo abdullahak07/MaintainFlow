@@ -10,22 +10,16 @@ module.exports = async function handler(req, res) {
   let databaseErrorCode = null;
   let databaseHost = null;
 
-  try {
-    const cfg = config();
-    databaseHost = cfg?.host || null;
-    if (cfg) {
-      try {
-        await select('properties', 'select=id&limit=1');
-        database = true;
-      } catch (error) {
-        databaseError = error?.details?.message || error?.causeMessage || error?.message || 'Database check failed';
-        databaseErrorCode = error?.code || null;
-        databaseHost = error?.host || databaseHost;
-      }
+  const cfg = config();
+  if (cfg) {
+    try {
+      databaseHost = new URL(cfg.url).hostname;
+      await select('properties', 'select=id&limit=1');
+      database = true;
+    } catch (error) {
+      databaseError = error?.details?.message || error?.cause?.message || error?.message || 'Database check failed';
+      databaseErrorCode = error?.cause?.code || error?.code || null;
     }
-  } catch (error) {
-    databaseError = error?.message || 'Database configuration invalid';
-    databaseErrorCode = error?.code || null;
   }
 
   return res.status(200).json({
@@ -33,6 +27,7 @@ module.exports = async function handler(req, res) {
     database,
     email: emailConfigured(),
     safeDemoRecipient: Boolean(process.env.DEMO_RECIPIENT),
+    functionRegion: process.env.VERCEL_REGION || null,
     ...(databaseHost ? { databaseHost } : {}),
     ...(databaseErrorCode ? { databaseErrorCode } : {}),
     ...(databaseError ? { databaseError } : {})
