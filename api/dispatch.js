@@ -5,6 +5,7 @@ const { contractorMessage } = require('../lib/workflow');
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   res.setHeader('Cache-Control', 'no-store');
+  const startedAt = Date.now();
 
   try {
     const workOrderId = Number(req.body?.workOrderId);
@@ -13,10 +14,14 @@ module.exports = async function handler(req, res) {
 
     const maxPerHour = Math.max(1, Number(process.env.MAX_DEMO_DISPATCHES_PER_HOUR || 20));
     const since = encodeURIComponent(new Date(Date.now() - 3600000).toISOString());
-    const recent = await select('events', `select=id&event_type=eq.tenant_notified&created_at=gte.${since}&limit=${maxPerHour}`);
+
+    const [recent, rows] = await Promise.all([
+      select('events', `select=id&event_type=eq.tenant_notified&created_at=gte.${since}&limit=${maxPerHour}`),
+      select('work_orders', `select=*&id=eq.${workOrderId}&limit=1`)
+    ]);
+
     if (recent.length >= maxPerHour) return res.status(429).json({ error: 'Demo dispatch limit reached. Try again later.', code: 'DEMO_RATE_LIMIT' });
 
-    const rows = await select('work_orders', `select=*&id=eq.${workOrderId}&limit=1`);
     const wo = rows[0];
     if (!wo) return res.status(404).json({ error: 'Work order not found' });
 
@@ -32,10 +37,11 @@ module.exports = async function handler(req, res) {
     }
 
     const [properties, tenants, contractors] = await Promise.all([
-      select('properties', `select=id,address&id=eq.${wo.property_id}`),
-      select('tenants', `select=id,name,email&id=eq.${wo.tenant_id}`),
-      select('contractors', `select=id,name,email,trade,response_sla_minutes&id=eq.${wo.contractor_id}`)
+      select('properties', `select=id,address&id=eq.${wo.property_id}&limit=1`),
+      select('tenants', `select=id,name,email&id=eq.${wo.tenant_id}&limit=1`),
+      select('contractors', `select=id,name,email,trade,response_sla_minutes&id=eq.${wo.contractor_id}&limit=1`)
     ]);
+
     const property = properties[0];
     const tenant = tenants[0];
     const contractor = contractors[0];
@@ -54,40 +60,43 @@ module.exports = async function handler(req, res) {
       estimatedHigh: wo.estimated_high
     });
 
-    const tenantSend = await sendEmail({
-      to: tenant.email,
-      intendedTo: tenant.email,
-      subject: `${workOrderCode}: Maintenance request received`,
-      text: tenantText
-    });
-
-    const contractorSend = await sendEmail({
-      to: contractor.email,
-      intendedTo: contractor.email,
-      subject: `${workOrderCode}: ${wo.priority} maintenance — ${property.address}`,
-      text: contractorText
-    });
+    const [tenantSend, contractorSend] = await Promise.all([
+      sendEmail({
+        to: tenant.email,
+        intendedTo: tenant.email,
+        subject: `${workOrderCode}: Maintenance request received`,
+        text: tenantText
+      }),
+      sendEmail({
+        to: contractor.email,
+        intendedTo: contractor.email,
+        subject: `${workOrderCode}: ${wo.priority} maintenance — ${property.address}`,
+        text: contractorText
+      })
+    ]);
 
     const dispatchedAt = new Date().toISOString();
-    await update('work_orders', `id=eq.${wo.id}`, {
-      tenant_message: tenantText,
-      status: 'dispatched',
-      dispatched_at: dispatchedAt,
-      tenant_email_message_id: tenantSend.id || null,
-      contractor_email_message_id: contractorSend.id || null
-    });
-
     const events = [
-      ['work_order_logged', 'Work order logged in MaintainFlow.'],
-      ['tenant_notified', `Tenant notification sent to ${tenantSend.actualTo}.`],
-      ['contractor_notified', `${contractor.name} notification sent to ${contractorSend.actualTo}.`],
-      ['property_timeline_updated', 'Property timeline updated.'],
-      ['response_timer_started', `${contractor.response_sla_minutes || 30}-minute contractor response timer started.`]
+      { work_order_id: wo.id, event_type: 'work_order_logged', detail: 'Work order logged in MaintainFlow.' },
+      { work_order_id: wo.id, event_type: 'tenant_notified', detail: `Tenant notification sent to ${tenantSend.actualTo}.` },
+      { work_order_id: wo.id, event_type: 'contractor_notified', detail: `${contractor.name} notification sent to ${contractorSend.actualTo}.` },
+      { work_order_id: wo.id, event_type: 'property_timeline_updated', detail: 'Property timeline updated.' },
+      { work_order_id: wo.id, event_type: 'response_timer_started', detail: `${contractor.response_sla_minutes || 30}-minute contractor response timer started.` }
     ];
-    for (const [event_type, detail] of events) {
-      await insert('events', { work_order_id: wo.id, event_type, detail });
-    }
 
+    await Promise.all([
+      update('work_orders', `id=eq.${wo.id}`, {
+        tenant_message: tenantText,
+        status: 'dispatched',
+        dispatched_at: dispatchedAt,
+        tenant_email_message_id: tenantSend.id || null,
+        contractor_email_message_id: contractorSend.id || null
+      }),
+      insert('events', events)
+    ]);
+
+    const dispatchMs = Date.now() - startedAt;
+    res.setHeader('Server-Timing', `maintainflow;dur=${dispatchMs}`);
     return res.status(200).json({
       ok: true,
       workOrderCode,
@@ -97,7 +106,8 @@ module.exports = async function handler(req, res) {
       responseSlaMinutes: contractor.response_sla_minutes || 30,
       tenantNotification: tenantSend,
       contractorNotification: contractorSend,
-      dispatchedAt
+      dispatchedAt,
+      dispatchMs
     });
   } catch (error) {
     if (error.code === 'NOT_CONFIGURED') return res.status(503).json({ error: 'Backend not configured', code: 'BACKEND_NOT_CONFIGURED' });
