@@ -99,3 +99,23 @@ select * from (values
 where not exists (
   select 1 from contractors c where c.name=x.name and c.trade=x.trade
 );
+
+-- New Supabase projects may not automatically grant Data API access to new
+-- public-schema tables. MaintainFlow's Vercel backend uses a server-side
+-- secret/service-role key, so grant only the service_role the privileges it
+-- needs. Do not grant these privileges to anon for this demo backend.
+grant usage on schema public to service_role;
+grant select, insert, update, delete on table
+  properties,
+  tenants,
+  contractors,
+  work_orders,
+  events
+to service_role;
+grant usage, select on all sequences in schema public to service_role;
+
+-- Keep future backend tables/sequences usable by the server role as well.
+alter default privileges in schema public
+grant select, insert, update, delete on tables to service_role;
+alter default privileges in schema public
+grant usage, select on sequences to service_role;
