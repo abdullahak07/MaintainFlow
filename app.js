@@ -218,12 +218,13 @@ function simulateIncoming() {
   $('incomingSnippet').textContent = body.replace(/\s+/g, ' ').slice(0, 150) + (body.length > 150 ? '…' : '');
   $('incomingEmail').classList.remove('hidden');
   $('simulateBtn').disabled = true;
-  $('simulateBtn').textContent = 'Processing automatically…';
+  $('simulateBtn').textContent = 'Email received — analysing…';
 
+  // Keep the incoming email visible long enough for a client to read it during the demo.
   setTimeout(() => {
     processRaw(sample.raw);
     simulating = false;
-  }, 850);
+  }, 2800);
 }
 
 async function approve() {
