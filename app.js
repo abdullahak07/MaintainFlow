@@ -34,11 +34,11 @@ const routes = {
   General: { trade: 'Maintenance tech', contractor: 'Metro Property Services', low: 160, high: 300, sla: 240 }
 };
 
+let workOrders = [];
+let pendingSyncs = [];
+let selectedIndex = null;
+let batchVersion = 0;
 let current = null;
-let pendingSync = null;
-let syncVersion = 0;
-let demoIndex = 0;
-let simulating = false;
 
 function parseEmail(raw) {
   const from = (raw.match(/^From:\s*(.+)$/mi) || [, 'tenant@example.com'])[1].trim();
@@ -95,45 +95,12 @@ function tenantMessage(name, issue, priority) {
 }
 
 function show(view) {
-  ['inboxView', 'workOrderView', 'completeView', 'rejectedView'].forEach(id => $(id).classList.add('hidden'));
+  ['inboxView', 'queueView', 'workOrderView', 'completeView', 'rejectedView'].forEach(id => $(id).classList.add('hidden'));
   $(view).classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function paintWorkOrder(data, { preserveReply = false, navigate = false } = {}) {
-  const existingReply = $('tenantReply').value;
-  current = data;
-
-  $('workOrderId').textContent = data.workOrderCode || 'Saving…';
-  $('propertyValue').textContent = data.property;
-  $('priorityPill').textContent = data.priority;
-  $('priorityPill').className = `priority ${data.priority.toLowerCase()}`;
-  $('tenantValue').textContent = data.tenant;
-  $('issueValue').textContent = data.issue;
-  $('tradeValue').textContent = data.trade;
-  $('contractorValue').textContent = data.contractor;
-  $('estimateValue').textContent = `$${data.estimatedLow}–$${data.estimatedHigh}`;
-  $('limitValue').textContent = data.ownerLimit == null ? '—' : `$${data.ownerLimit}`;
-  $('budgetStatus').textContent = data.withinLimit ? 'Within limit' : 'Approval needed';
-  $('budgetStatus').className = `budget-status${data.withinLimit ? '' : ' over'}`;
-  $('tenantReply').value = preserveReply && existingReply ? existingReply : data.tenantMessage;
-
-  if (data.syncing) {
-    $('approveBtn').disabled = true;
-    $('approveBtn').textContent = 'Preparing…';
-  } else if (data.syncError && !data.demoFallback) {
-    $('approveBtn').disabled = true;
-    $('approveBtn').textContent = 'Backend unavailable';
-  } else {
-    const dispatchable = data.demoFallback || (data.backend && !data.requiresAttention && data.withinLimit);
-    $('approveBtn').disabled = !dispatchable;
-    $('approveBtn').textContent = dispatchable ? 'Approve & dispatch' : 'Manual review required';
-  }
-
-  if (navigate) show('workOrderView');
-}
-
-function localProcess(raw) {
+function localProcess(raw, sampleKey) {
   const { from, subject, body } = parseEmail(raw);
   const [category, priority] = classify(`${subject} ${body}`);
   const extractedAddress = extractAddress(body);
@@ -143,14 +110,18 @@ function localProcess(raw) {
   const withinLimit = route.high <= property.limit;
 
   return {
+    sampleKey,
+    raw,
     backend: false,
     syncing: true,
     demoFallback: false,
-    workOrderCode: 'Saving…',
+    syncError: false,
+    workOrderCode: 'Preparing…',
     issue: subject,
     property: property.address,
     ownerLimit: property.limit,
     tenant,
+    tenantEmail: from,
     category,
     priority,
     trade: route.trade,
@@ -160,142 +131,281 @@ function localProcess(raw) {
     withinLimit,
     requiresAttention: false,
     tenantMessage: tenantMessage(tenant, subject, priority),
-    responseSlaMinutes: route.sla
+    editedTenantMessage: null,
+    responseSlaMinutes: route.sla,
+    uiStatus: 'ready'
   };
 }
 
-function syncToBackend(raw, draft, version) {
-  return fetch('/api/process', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ rawEmail: raw })
-  })
-    .then(async res => ({ res, data: await res.json().catch(() => ({})) }))
-    .then(({ res, data }) => {
-      if (version !== syncVersion) return null;
-
-      if (res.ok) {
-        const merged = { ...draft, ...data, backend: true, syncing: false, demoFallback: false, syncError: false };
-        paintWorkOrder(merged, { preserveReply: true });
-        return merged;
-      }
-
-      if (res.status === 503 && data.code === 'BACKEND_NOT_CONFIGURED') {
-        const fallback = { ...draft, syncing: false, demoFallback: true, syncError: false };
-        paintWorkOrder(fallback, { preserveReply: true });
-        return fallback;
-      }
-
-      throw new Error(data.error || 'Could not save work order');
-    })
-    .catch(error => {
-      if (version !== syncVersion) return null;
-      const failed = { ...draft, syncing: false, syncError: true, demoFallback: false };
-      paintWorkOrder(failed, { preserveReply: true });
-      toast(error.message || 'Backend unavailable');
-      return failed;
-    });
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+  })[char]);
 }
 
-function processRaw(raw) {
-  const version = ++syncVersion;
-  const draft = localProcess(raw);
-  paintWorkOrder(draft, { navigate: true });
-  pendingSync = syncToBackend(raw, draft, version);
+function renderInboxEmails() {
+  $('inboxList').innerHTML = samples.map((sample, index) => {
+    const { from, subject, body } = parseEmail(sample.raw);
+    const snippet = body.replace(/\s+/g, ' ').slice(0, 118) + (body.length > 118 ? '…' : '');
+    return `
+      <article class="mail-row" style="--delay:${index * 85}ms">
+        <span class="unread-dot"></span>
+        <div class="mail-row-body">
+          <div class="mail-row-top"><strong>${escapeHtml(from)}</strong><span>Just now</span></div>
+          <h2>${escapeHtml(subject)}</h2>
+          <p>${escapeHtml(snippet)}</p>
+        </div>
+      </article>`;
+  }).join('');
 }
 
 function simulateIncoming() {
-  if (simulating) return;
-  simulating = true;
-
-  const sample = samples[demoIndex % samples.length];
-  demoIndex += 1;
-  const { from, subject, body } = parseEmail(sample.raw);
-
   $('inboxIdle').classList.add('hidden');
-  $('incomingFrom').textContent = from;
-  $('incomingSubject').textContent = subject;
-  $('incomingSnippet').textContent = body.replace(/\s+/g, ' ').slice(0, 150) + (body.length > 150 ? '…' : '');
-  $('incomingEmail').classList.remove('hidden');
-  $('simulateBtn').disabled = true;
-  $('simulateBtn').textContent = 'Email received — analysing…';
+  renderInboxEmails();
+  $('inboxList').classList.remove('hidden');
+  $('simulateBtn').classList.add('hidden');
+  $('analyzeBtn').classList.remove('hidden');
+  $('inboxCount').textContent = '4 new tenant emails received automatically';
+}
 
-  // Keep the incoming email visible long enough for a client to read it during the demo.
-  setTimeout(() => {
-    processRaw(sample.raw);
-    simulating = false;
-  }, 2800);
+function statusFor(order) {
+  if (order.uiStatus === 'dispatched') return ['Dispatched', 'done'];
+  if (order.uiStatus === 'rejected') return ['Rejected', 'rejected'];
+  if (order.syncError) return ['Backend unavailable', 'error'];
+  if (order.syncing) return ['Preparing…', 'preparing'];
+  if (order.requiresAttention || !order.withinLimit) return ['Review needed', 'review'];
+  return ['Ready', 'ready'];
+}
+
+function renderQueue() {
+  const dispatched = workOrders.filter(o => o.uiStatus === 'dispatched').length;
+  const rejected = workOrders.filter(o => o.uiStatus === 'rejected').length;
+  const remaining = workOrders.length - dispatched - rejected;
+  $('queueSubtitle').textContent = `${workOrders.length} requests analyzed · ${remaining} awaiting review`;
+
+  $('workOrderList').innerHTML = workOrders.map((order, index) => {
+    const [status, statusClass] = statusFor(order);
+    return `
+      <button class="work-order-card" type="button" data-order-index="${index}">
+        <div class="work-order-card-top">
+          <div>
+            <span class="order-code">${escapeHtml(order.workOrderCode || 'Preparing…')}</span>
+            <strong>${escapeHtml(order.issue)}</strong>
+          </div>
+          <span class="queue-priority ${order.priority.toLowerCase()}">${escapeHtml(order.priority)}</span>
+        </div>
+        <div class="queue-property">${escapeHtml(order.property)}</div>
+        <div class="queue-meta"><span>${escapeHtml(order.trade)}</span><span>${escapeHtml(order.contractor)}</span></div>
+        <div class="queue-footer"><span>$${order.estimatedLow}–$${order.estimatedHigh}</span><span class="queue-status ${statusClass}">${status}</span></div>
+      </button>`;
+  }).join('');
+
+  document.querySelectorAll('[data-order-index]').forEach(btn => {
+    btn.addEventListener('click', () => openWorkOrder(Number(btn.dataset.orderIndex)));
+  });
+}
+
+function syncOne(index, version) {
+  const order = workOrders[index];
+  return fetch('/api/process', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rawEmail: order.raw })
+  })
+    .then(async res => ({ res, data: await res.json().catch(() => ({})) }))
+    .then(({ res, data }) => {
+      if (version !== batchVersion || !workOrders[index]) return null;
+
+      if (res.ok) {
+        workOrders[index] = {
+          ...workOrders[index],
+          ...data,
+          backend: true,
+          syncing: false,
+          demoFallback: false,
+          syncError: false,
+          uiStatus: workOrders[index].uiStatus
+        };
+      } else if (res.status === 503 && data.code === 'BACKEND_NOT_CONFIGURED') {
+        workOrders[index] = { ...workOrders[index], syncing: false, demoFallback: true, syncError: false };
+      } else {
+        throw new Error(data.error || 'Could not save work order');
+      }
+
+      renderQueue();
+      if (selectedIndex === index && !$('workOrderView').classList.contains('hidden')) paintWorkOrder(workOrders[index], true);
+      return workOrders[index];
+    })
+    .catch(() => {
+      if (version !== batchVersion || !workOrders[index]) return null;
+      workOrders[index] = { ...workOrders[index], syncing: false, syncError: true, demoFallback: false };
+      renderQueue();
+      if (selectedIndex === index && !$('workOrderView').classList.contains('hidden')) paintWorkOrder(workOrders[index], true);
+      return null;
+    });
+}
+
+function analyzeAll() {
+  const version = ++batchVersion;
+  $('analyzeBtn').disabled = true;
+  $('analyzeBtn').textContent = 'Analyzing 4 emails…';
+  workOrders = samples.map(sample => localProcess(sample.raw, sample.key));
+  pendingSyncs = workOrders.map((_, index) => syncOne(index, version));
+  renderQueue();
+  show('queueView');
+}
+
+function saveCurrentReply() {
+  if (selectedIndex == null || !workOrders[selectedIndex]) return;
+  workOrders[selectedIndex].editedTenantMessage = $('tenantReply').value.trim();
+}
+
+function paintWorkOrder(order, preserveReply = false) {
+  const currentReply = preserveReply ? $('tenantReply').value : null;
+  current = order;
+
+  $('workOrderId').textContent = order.workOrderCode || 'Preparing…';
+  $('propertyValue').textContent = order.property;
+  $('priorityPill').textContent = order.priority;
+  $('priorityPill').className = `priority ${order.priority.toLowerCase()}`;
+  $('tenantValue').textContent = order.tenant;
+  $('issueValue').textContent = order.issue;
+  $('tradeValue').textContent = order.trade;
+  $('contractorValue').textContent = order.contractor;
+  $('estimateValue').textContent = `$${order.estimatedLow}–$${order.estimatedHigh}`;
+  $('limitValue').textContent = order.ownerLimit == null ? '—' : `$${order.ownerLimit}`;
+  $('budgetStatus').textContent = order.withinLimit ? 'Within limit' : 'Approval needed';
+  $('budgetStatus').className = `budget-status${order.withinLimit ? '' : ' over'}`;
+  $('tenantReply').value = currentReply || order.editedTenantMessage || order.tenantMessage;
+
+  if (order.uiStatus === 'dispatched') {
+    $('approveBtn').disabled = true;
+    $('approveBtn').textContent = 'Already dispatched';
+    $('rejectBtn').disabled = true;
+  } else if (order.uiStatus === 'rejected') {
+    $('approveBtn').disabled = true;
+    $('approveBtn').textContent = 'Rejected';
+    $('rejectBtn').disabled = true;
+  } else if (order.syncing) {
+    $('approveBtn').disabled = true;
+    $('approveBtn').textContent = 'Preparing…';
+    $('rejectBtn').disabled = false;
+  } else if (order.syncError && !order.demoFallback) {
+    $('approveBtn').disabled = true;
+    $('approveBtn').textContent = 'Backend unavailable';
+    $('rejectBtn').disabled = false;
+  } else {
+    const dispatchable = order.demoFallback || (order.backend && !order.requiresAttention && order.withinLimit);
+    $('approveBtn').disabled = !dispatchable;
+    $('approveBtn').textContent = dispatchable ? 'Approve & dispatch' : 'Manual review required';
+    $('rejectBtn').disabled = false;
+  }
+}
+
+function openWorkOrder(index) {
+  selectedIndex = index;
+  paintWorkOrder(workOrders[index]);
+  show('workOrderView');
+}
+
+function backToQueue() {
+  saveCurrentReply();
+  selectedIndex = null;
+  current = null;
+  renderQueue();
+  show('queueView');
 }
 
 async function approve() {
-  if (!current) return;
-
+  if (selectedIndex == null || !workOrders[selectedIndex]) return;
+  const index = selectedIndex;
+  saveCurrentReply();
   $('approveBtn').disabled = true;
   $('approveBtn').textContent = 'Dispatching…';
 
   try {
-    if (current.syncing && pendingSync) await pendingSync;
-    if (!current) throw new Error('Work order unavailable');
-    if (current.syncError && !current.demoFallback) throw new Error('Work order was not saved. Try again.');
+    if (workOrders[index].syncing && pendingSyncs[index]) await pendingSyncs[index];
+    const order = workOrders[index];
+    if (!order) throw new Error('Work order unavailable');
+    if (order.syncError && !order.demoFallback) throw new Error('Work order was not saved. Try again.');
 
-    if (current.backend) {
+    if (order.backend) {
       const res = await fetch('/api/dispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          workOrderId: current.workOrderId,
-          tenantMessage: $('tenantReply').value.trim()
+          workOrderId: order.workOrderId,
+          tenantMessage: order.editedTenantMessage || order.tenantMessage
         })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Dispatch failed');
-      current.contractor = data.contractor || current.contractor;
-      current.responseSlaMinutes = data.responseSlaMinutes || current.responseSlaMinutes;
+      workOrders[index] = {
+        ...order,
+        contractor: data.contractor || order.contractor,
+        responseSlaMinutes: data.responseSlaMinutes || order.responseSlaMinutes,
+        uiStatus: 'dispatched'
+      };
+    } else {
+      workOrders[index] = { ...order, uiStatus: 'dispatched' };
     }
 
-    $('completeWorkOrderId').textContent = current.workOrderCode || '—';
-    $('completeProperty').textContent = `${current.property} · ${current.priority}`;
-    $('contractorDone').textContent = `${current.contractor} notified`;
-    $('timerDone').textContent = `${current.responseSlaMinutes || 30}-min response timer started`;
+    const done = workOrders[index];
+    current = done;
+    renderQueue();
+    $('completeWorkOrderId').textContent = done.workOrderCode || '—';
+    $('completeProperty').textContent = `${done.property} · ${done.priority}`;
+    $('contractorDone').textContent = `${done.contractor} notified`;
+    $('timerDone').textContent = `${done.responseSlaMinutes || 30}-min response timer started`;
     show('completeView');
   } catch (error) {
     toast(error.message);
-    $('approveBtn').disabled = false;
-    $('approveBtn').textContent = 'Approve & dispatch';
+    paintWorkOrder(workOrders[index], true);
   }
 }
 
 async function reject() {
-  if (current?.syncing && pendingSync) await pendingSync;
+  if (selectedIndex == null || !workOrders[selectedIndex]) return;
+  const index = selectedIndex;
+  saveCurrentReply();
 
-  if (current?.backend) {
-    try {
+  try {
+    if (workOrders[index].syncing && pendingSyncs[index]) await pendingSyncs[index];
+    const order = workOrders[index];
+    if (order?.backend) {
       const res = await fetch('/api/reject', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workOrderId: current.workOrderId })
+        body: JSON.stringify({ workOrderId: order.workOrderId })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Reject failed');
-    } catch (error) {
-      return toast(error.message);
     }
+    workOrders[index] = { ...order, uiStatus: 'rejected' };
+    renderQueue();
+    show('rejectedView');
+  } catch (error) {
+    toast(error.message);
   }
-  show('rejectedView');
 }
 
-function reset() {
-  syncVersion += 1;
+function resetDemo() {
+  batchVersion += 1;
+  workOrders = [];
+  pendingSyncs = [];
+  selectedIndex = null;
   current = null;
-  pendingSync = null;
-  simulating = false;
-  $('incomingEmail').classList.add('hidden');
+  $('inboxList').innerHTML = '';
+  $('inboxList').classList.add('hidden');
   $('inboxIdle').classList.remove('hidden');
   $('simulateBtn').classList.remove('hidden');
   $('simulateBtn').disabled = false;
-  $('simulateBtn').textContent = 'Simulate incoming email';
+  $('analyzeBtn').classList.add('hidden');
+  $('analyzeBtn').disabled = false;
+  $('analyzeBtn').textContent = 'Analyze 4 maintenance emails';
+  $('inboxCount').textContent = 'Waiting for new tenant requests';
   $('approveBtn').disabled = false;
-  $('approveBtn').textContent = 'Approve & dispatch';
+  $('rejectBtn').disabled = false;
   show('inboxView');
 }
 
@@ -309,8 +419,10 @@ function toast(message) {
 }
 
 $('simulateBtn').addEventListener('click', simulateIncoming);
+$('analyzeBtn').addEventListener('click', analyzeAll);
 $('approveBtn').addEventListener('click', approve);
 $('rejectBtn').addEventListener('click', reject);
-$('backBtn').addEventListener('click', () => show('inboxView'));
-$('newRequestBtn').addEventListener('click', reset);
-$('rejectedBackBtn').addEventListener('click', () => show('workOrderView'));
+$('backBtn').addEventListener('click', backToQueue);
+$('backToQueueBtn').addEventListener('click', backToQueue);
+$('rejectedBackBtn').addEventListener('click', backToQueue);
+$('queueResetBtn').addEventListener('click', resetDemo);
