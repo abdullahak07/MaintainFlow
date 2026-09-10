@@ -1,11 +1,23 @@
 const $ = id => document.getElementById(id);
 
-const samples = {
-  leak: `From: sarah.lee@example.com\nSubject: Water leaking under kitchen sink\n\nHi, I'm Sarah at 18 Lakeview Rd, Como. There is water leaking heavily under the kitchen sink and the cupboard is getting wet. It started this morning.`,
-  power: `From: daniel.wong@example.com\nSubject: Power keeps tripping\n\nHi, Daniel here from Unit 7, 42 Oxford St, Leederville. The power keeps tripping whenever we use the kitchen outlets. There are no sparks or smoke, but we have lost power to half the apartment.`,
-  lock: `From: aisha.khan@example.com\nSubject: Front door lock broken\n\nHello, I'm Aisha at 9 Park Lane, Victoria Park. The front door lock has broken and the property is not secure.`,
-  gas: `From: michael.chen@example.com\nSubject: Strong gas smell near stove\n\nHi, Michael at 31 River View, East Perth. There is a strong smell of gas near the stove and it has become worse in the last 20 minutes. We have turned the stove off and opened the windows.`
-};
+const samples = [
+  {
+    key: 'power',
+    raw: `From: daniel.wong@example.com\nSubject: Power keeps tripping\n\nHi, Daniel here from Unit 7, 42 Oxford St, Leederville. The power keeps tripping whenever we use the kitchen outlets. There are no sparks or smoke, but we have lost power to half the apartment.`
+  },
+  {
+    key: 'leak',
+    raw: `From: sarah.lee@example.com\nSubject: Water leaking under kitchen sink\n\nHi, I'm Sarah at 18 Lakeview Rd, Como. There is water leaking heavily under the kitchen sink and the cupboard is getting wet. It started this morning.`
+  },
+  {
+    key: 'lock',
+    raw: `From: aisha.khan@example.com\nSubject: Front door lock broken\n\nHello, I'm Aisha at 9 Park Lane, Victoria Park. The front door lock has broken and the property is not secure.`
+  },
+  {
+    key: 'gas',
+    raw: `From: michael.chen@example.com\nSubject: Strong gas smell near stove\n\nHi, Michael at 31 River View, East Perth. There is a strong smell of gas near the stove and it has become worse in the last 20 minutes. We have turned the stove off and opened the windows.`
+  }
+];
 
 const propertyRecords = [
   { match: '18 lakeview rd, como', address: '18 Lakeview Rd, Como', limit: 500 },
@@ -25,6 +37,8 @@ const routes = {
 let current = null;
 let pendingSync = null;
 let syncVersion = 0;
+let demoIndex = 0;
+let simulating = false;
 
 function parseEmail(raw) {
   const from = (raw.match(/^From:\s*(.+)$/mi) || [, 'tenant@example.com'])[1].trim();
@@ -56,9 +70,9 @@ function extractName(text, email) {
     /(?:hi,?\s+)([A-Z][a-z]+)\s+(?:here|at|from)/,
     /(?:hello,?\s+i['’]?m\s+)([A-Z][a-z]+)/i
   ];
-  for (const p of patterns) {
-    const m = text.match(p);
-    if (m) return m[1];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) return match[1];
   }
   const local = email.split('@')[0].replace(/[._-]+/g, ' ');
   return local.split(' ').map(w => w ? w[0].toUpperCase() + w.slice(1) : '').join(' ') || 'Tenant';
@@ -81,7 +95,7 @@ function tenantMessage(name, issue, priority) {
 }
 
 function show(view) {
-  ['inputView', 'workOrderView', 'completeView', 'rejectedView'].forEach(id => $(id).classList.add('hidden'));
+  ['inboxView', 'workOrderView', 'completeView', 'rejectedView'].forEach(id => $(id).classList.add('hidden'));
   $(view).classList.remove('hidden');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -183,16 +197,33 @@ function syncToBackend(raw, draft, version) {
     });
 }
 
-function processRequest() {
-  const raw = $('emailInput').value.trim();
-  if (!raw) return toast('Paste an email first.');
-
+function processRaw(raw) {
   const version = ++syncVersion;
   const draft = localProcess(raw);
-
-  // The useful result appears immediately. Persistence/matching happens in parallel.
   paintWorkOrder(draft, { navigate: true });
   pendingSync = syncToBackend(raw, draft, version);
+}
+
+function simulateIncoming() {
+  if (simulating) return;
+  simulating = true;
+
+  const sample = samples[demoIndex % samples.length];
+  demoIndex += 1;
+  const { from, subject, body } = parseEmail(sample.raw);
+
+  $('inboxIdle').classList.add('hidden');
+  $('incomingFrom').textContent = from;
+  $('incomingSubject').textContent = subject;
+  $('incomingSnippet').textContent = body.replace(/\s+/g, ' ').slice(0, 150) + (body.length > 150 ? '…' : '');
+  $('incomingEmail').classList.remove('hidden');
+  $('simulateBtn').disabled = true;
+  $('simulateBtn').textContent = 'Processing automatically…';
+
+  setTimeout(() => {
+    processRaw(sample.raw);
+    simulating = false;
+  }, 850);
 }
 
 async function approve() {
@@ -256,10 +287,15 @@ function reset() {
   syncVersion += 1;
   current = null;
   pendingSync = null;
-  $('emailInput').value = '';
+  simulating = false;
+  $('incomingEmail').classList.add('hidden');
+  $('inboxIdle').classList.remove('hidden');
+  $('simulateBtn').classList.remove('hidden');
+  $('simulateBtn').disabled = false;
+  $('simulateBtn').textContent = 'Simulate incoming email';
   $('approveBtn').disabled = false;
   $('approveBtn').textContent = 'Approve & dispatch';
-  show('inputView');
+  show('inboxView');
 }
 
 let toastTimer;
@@ -271,13 +307,9 @@ function toast(message) {
   toastTimer = setTimeout(() => el.classList.add('hidden'), 2400);
 }
 
-$('processBtn').addEventListener('click', processRequest);
+$('simulateBtn').addEventListener('click', simulateIncoming);
 $('approveBtn').addEventListener('click', approve);
 $('rejectBtn').addEventListener('click', reject);
-$('backBtn').addEventListener('click', () => show('inputView'));
-$('clearBtn').addEventListener('click', reset);
+$('backBtn').addEventListener('click', () => show('inboxView'));
 $('newRequestBtn').addEventListener('click', reset);
 $('rejectedBackBtn').addEventListener('click', () => show('workOrderView'));
-document.querySelectorAll('[data-sample]').forEach(btn => {
-  btn.addEventListener('click', () => { $('emailInput').value = samples[btn.dataset.sample]; });
-});

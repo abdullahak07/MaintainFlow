@@ -11,35 +11,40 @@
   <main class="shell">
     <header class="header">
       <strong>MaintainFlow</strong>
-      <span>Demo</span>
+      <span>Pilot demo</span>
     </header>
 
-    <section id="inputView" class="card">
-      <div class="card-head">
-        <h1>Tenant email</h1>
-        <button id="clearBtn" class="text-btn" type="button">Clear</button>
+    <section id="inboxView" class="card inbox-card">
+      <div class="card-head inbox-head">
+        <h1>Maintenance inbox</h1>
+        <span class="watching"><i></i> Watching</span>
       </div>
 
-      <textarea id="emailInput" spellcheck="false">From: michael.chen@example.com
-Subject: Strong gas smell near stove
-
-Hi, Michael at 31 River View, East Perth. There is a strong smell of gas near the stove and it has become worse in the last 20 minutes. We have turned the stove off and opened the windows.</textarea>
-
-      <div class="samples" aria-label="Sample maintenance emails">
-        <button type="button" data-sample="leak">Leak</button>
-        <button type="button" data-sample="power">Power</button>
-        <button type="button" data-sample="lock">Lock</button>
-        <button type="button" data-sample="gas">Gas</button>
+      <div id="inboxIdle" class="inbox-idle">
+        <div class="inbox-icon">↓</div>
+        <strong>No new requests</strong>
+        <span>Inbox connected and ready</span>
       </div>
 
-      <button id="processBtn" class="primary full" type="button">Process request</button>
+      <div id="incomingEmail" class="mail-preview hidden" aria-live="polite">
+        <div class="mail-meta">
+          <span class="unread-dot"></span>
+          <strong id="incomingFrom">—</strong>
+          <span>Just now</span>
+        </div>
+        <h2 id="incomingSubject">—</h2>
+        <p id="incomingSnippet">—</p>
+        <div class="received-state"><span>✓</span> Received automatically</div>
+      </div>
+
+      <button id="simulateBtn" class="primary full" type="button">Simulate incoming email</button>
     </section>
 
     <section id="workOrderView" class="card hidden" aria-live="polite">
       <div class="card-head">
         <div>
           <h1>Work order ready</h1>
-          <span id="workOrderId" class="subtle">MF-0000</span>
+          <span id="workOrderId" class="subtle">Saving…</span>
         </div>
         <button id="backBtn" class="text-btn" type="button">Back</button>
       </div>
@@ -78,7 +83,7 @@ Hi, Michael at 31 River View, East Perth. There is a strong smell of gas near th
       <label class="label message-label" for="tenantReply">Tenant message</label>
       <textarea id="tenantReply" class="reply" rows="3"></textarea>
 
-      <div id="reviewActions" class="actions">
+      <div class="actions">
         <button id="rejectBtn" class="secondary" type="button">Reject</button>
         <button id="approveBtn" class="primary" type="button">Approve & dispatch</button>
       </div>
@@ -89,7 +94,7 @@ Hi, Michael at 31 River View, East Perth. There is a strong smell of gas near th
         <span class="success-mark">✓</span>
         <div>
           <h1>Dispatched</h1>
-          <span id="completeWorkOrderId" class="subtle">MF-0000</span>
+          <span id="completeWorkOrderId" class="subtle">—</span>
         </div>
       </div>
 
@@ -103,7 +108,7 @@ Hi, Michael at 31 River View, East Perth. There is a strong smell of gas near th
         <div><span>✓</span><strong id="timerDone">Response timer started</strong></div>
       </div>
 
-      <button id="newRequestBtn" class="primary full" type="button">New request</button>
+      <button id="newRequestBtn" class="primary full" type="button">Simulate another request</button>
     </section>
 
     <section id="rejectedView" class="card hidden" aria-live="polite">
