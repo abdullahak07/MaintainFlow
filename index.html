@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#f5f6f8" />
   <title>MaintainFlow</title>
   <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/queue.css" />
 </head>
 <body>
   <main class="shell">
@@ -16,7 +17,10 @@
 
     <section id="inboxView" class="card inbox-card">
       <div class="card-head inbox-head">
-        <h1>Maintenance inbox</h1>
+        <div>
+          <h1>Maintenance inbox</h1>
+          <span id="inboxCount" class="subtle">Waiting for new tenant requests</span>
+        </div>
         <span class="watching"><i></i> Watching</span>
       </div>
 
@@ -26,18 +30,21 @@
         <span>Inbox connected and ready</span>
       </div>
 
-      <div id="incomingEmail" class="mail-preview hidden" aria-live="polite">
-        <div class="mail-meta">
-          <span class="unread-dot"></span>
-          <strong id="incomingFrom">—</strong>
-          <span>Just now</span>
-        </div>
-        <h2 id="incomingSubject">—</h2>
-        <p id="incomingSnippet">—</p>
-        <div class="received-state"><span>✓</span> Received automatically</div>
-      </div>
+      <div id="inboxList" class="mail-list hidden" aria-live="polite"></div>
 
-      <button id="simulateBtn" class="primary full" type="button">Simulate incoming email</button>
+      <button id="simulateBtn" class="primary full" type="button">Simulate incoming emails</button>
+      <button id="analyzeBtn" class="primary full hidden" type="button">Analyze 4 maintenance emails</button>
+    </section>
+
+    <section id="queueView" class="card hidden" aria-live="polite">
+      <div class="card-head">
+        <div>
+          <h1>Work orders ready</h1>
+          <span id="queueSubtitle" class="subtle">4 requests analyzed — click any work order to review</span>
+        </div>
+        <button id="queueResetBtn" class="text-btn" type="button">Start over</button>
+      </div>
+      <div id="workOrderList" class="work-order-list"></div>
     </section>
 
     <section id="workOrderView" class="card hidden" aria-live="polite">
@@ -46,7 +53,7 @@
           <h1>Work order ready</h1>
           <span id="workOrderId" class="subtle">Saving…</span>
         </div>
-        <button id="backBtn" class="text-btn" type="button">Back</button>
+        <button id="backBtn" class="text-btn" type="button">Work orders</button>
       </div>
 
       <div class="property-row">
@@ -108,7 +115,7 @@
         <div><span>✓</span><strong id="timerDone">Response timer started</strong></div>
       </div>
 
-      <button id="newRequestBtn" class="primary full" type="button">Simulate another request</button>
+      <button id="backToQueueBtn" class="primary full" type="button">Back to work orders</button>
     </section>
 
     <section id="rejectedView" class="card hidden" aria-live="polite">
@@ -116,7 +123,7 @@
         <span>×</span>
         <h1>Request rejected</h1>
         <p>No tenant or contractor message was sent.</p>
-        <button id="rejectedBackBtn" class="secondary" type="button">Back</button>
+        <button id="rejectedBackBtn" class="secondary" type="button">Back to work orders</button>
       </div>
     </section>
   </main>
