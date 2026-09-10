@@ -7,6 +7,7 @@
   <title>MaintainFlow</title>
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/queue.css" />
+  <link rel="stylesheet" href="/reject-flow.css" />
 </head>
 <body>
   <main class="shell">
@@ -123,7 +124,7 @@
       <div class="rejected-state">
         <span>×</span>
         <h1>Request rejected</h1>
-        <p>No tenant or contractor message was sent.</p>
+        <p>Tenant notified. No contractor message was sent.</p>
         <button id="rejectedBackBtn" class="secondary" type="button">Back to work orders</button>
       </div>
     </section>
@@ -131,5 +132,6 @@
 
   <div id="toast" class="toast hidden"></div>
   <script src="/app.js" defer></script>
+  <script src="/reject-flow.js" defer></script>
 </body>
 </html>
